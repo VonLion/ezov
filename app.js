@@ -179,7 +179,7 @@ function renderBoard(board) {
     const mins = Math.max(0, Math.round((dep - now) / 60000));
     const delayMin = delays[i];
     const key = st.tripId || `${st.routeShortName}-${st.place.scheduledDeparture}`;
-    const cdText = mins === 0 ? 'nu' : `${mins} min`;
+    const cdText = countdownText(mins);
     const tmText = timeFmt.format(sched);
 
     const li = document.createElement('li');
@@ -191,7 +191,10 @@ function renderBoard(board) {
     const headsign = el('span', 'dep-headsign', st.headsign || '');
     li.append(badge, headsign);
     if (board.showTrack && st.place.track) {
-      li.append(el('span', 'dep-track', `spoor ${st.place.track}`));
+      const tr = el('span', 'dep-track', String(st.place.track));
+      tr.title = `spoor ${st.place.track}`;
+      tr.setAttribute('aria-label', `spoor ${st.place.track}`);
+      li.append(tr);
     }
     const time = el('span', 'dep-time', '');
     const oldTm = key in prevTm ? prevTm[key] : null;
@@ -660,6 +663,14 @@ function formatDuration(seconds) {
   const mins = Math.round(seconds / 60);
   if (mins < 60) return `${mins} min`;
   return `${Math.floor(mins / 60)}u ${String(mins % 60).padStart(2, '0')}`;
+}
+
+// Countdown label: "nu", "X min", or "Hu MM" once it's an hour or more away
+// (keeps the column narrow when the next departure is far off, e.g. at night).
+function countdownText(mins) {
+  if (mins === 0) return 'nu';
+  if (mins < 60) return `${mins} min`;
+  return `${Math.floor(mins / 60)}u${String(mins % 60).padStart(2, '0')}`;
 }
 
 // ============================================================
