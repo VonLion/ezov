@@ -102,11 +102,11 @@ function modeIcon(type) {
 // placeholder and the quick-pick chips; `address` is geocoded when tapped.
 const QUICK_DESTINATIONS = [
   { label: 'Oma',               address: 'Eerste Jan Steenstraat, Amsterdam' },
-  { label: 'Boze Zwanenmuseum', address: 'Museumstraat 1, Amsterdam' },
-  { label: 'Opa',               address: 'Amstel, Amsterdam' },
+  { label: 'Boze-Zwaanmuseum',  address: 'Museumstraat 1, Amsterdam' },
+  { label: 'Opa Boot',          address: 'Amstel, Amsterdam' },
   { label: 'Cafeetje',          address: 'Pretoriusstraat 15, Amsterdam' },
   { label: 'De Hut',            address: 'Rampweg 10, Renesse' },
-  { label: 'Opa & Oma',         address: 'Rollandhof, Zierikzee' },
+  { label: 'Opa & Oma Zeeland', address: 'Rollandhof, Zierikzee' },
   { label: 'Skydive',           address: 'Noodweg 49, Hilversum' },
 ];
 

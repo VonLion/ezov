@@ -103,6 +103,12 @@ body {
 .screw:nth-of-type(3) { bottom: 8px; left: 8px; }
 .screw:nth-of-type(4) { bottom: 8px; right: 8px; }
 
+/* Each screw's slot sits at its own angle, so they don't look stamped. */
+.screw:nth-of-type(1)::after { transform: rotate(22deg); }
+.screw:nth-of-type(2)::after { transform: rotate(-37deg); }
+.screw:nth-of-type(3)::after { transform: rotate(71deg); }
+.screw:nth-of-type(4)::after { transform: rotate(-9deg); }
+
 /* Brand header — sits directly on the recess */
 header {
   display: flex;
