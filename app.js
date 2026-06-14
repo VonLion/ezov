@@ -68,6 +68,18 @@ const ROUTE_ORIGINS = [
   },
 ];
 
+// Favourite destinations — edit freely. `label` shows in the split-flap
+// placeholder and the quick-pick chips; `address` is geocoded when tapped.
+const QUICK_DESTINATIONS = [
+  { label: 'Oma',               address: 'Eerste Jan Steenstraat, Amsterdam' },
+  { label: 'Boze Zwanenmuseum', address: 'Museumstraat 1, Amsterdam' },
+  { label: 'Opa',               address: 'Amstel, Amsterdam' },
+  { label: 'Cafeetje',          address: 'Pretoriusstraat 15, Amsterdam' },
+  { label: 'De Hut',            address: 'Rampweg 10, Renesse' },
+  { label: 'Opa & Oma',         address: 'Rollandhof, Zierikzee' },
+  { label: 'Skydive',           address: 'Noodweg 49, Hilversum' },
+];
+
 const GEOCODE_BIAS = '52.305,4.975'; // home area, ranks nearby results higher
 const REFRESH_MS = 30_000;
 const MAX_RECENTS = 8;
@@ -119,12 +131,20 @@ function renderBoard(board) {
     prevCd[li.dataset.key] = li.dataset.cd;
   });
 
+  // Reserve a delay column only as wide as the current view needs: 0 when
+  // everything is on time, otherwise sized to the largest delay shown.
+  const delays = shown.map((st) =>
+    Math.round((new Date(st.place.departure) - new Date(st.place.scheduledDeparture)) / 60000));
+  const maxDelay = Math.max(0, ...delays);
+  const showDelay = maxDelay > 0;
+  list.style.setProperty('--delay-w', showDelay ? `${`+${maxDelay}`.length}ch` : '0px');
+
   list.innerHTML = '';
-  for (const st of shown) {
+  shown.forEach((st, i) => {
     const dep = new Date(st.place.departure);
     const sched = new Date(st.place.scheduledDeparture);
     const mins = Math.max(0, Math.round((dep - now) / 60000));
-    const delayMin = Math.round((dep - sched) / 60000);
+    const delayMin = delays[i];
     const key = st.tripId || `${st.routeShortName}-${st.place.scheduledDeparture}`;
     const cdText = mins === 0 ? 'nu' : `${mins} min`;
 
@@ -140,7 +160,7 @@ function renderBoard(board) {
       li.append(el('span', 'dep-track', `spoor ${st.place.track}`));
     }
     li.append(el('span', 'dep-time', timeFmt.format(sched)));
-    if (delayMin > 0) li.append(el('span', 'dep-delay', `+${delayMin}`));
+    if (showDelay) li.append(el('span', 'dep-delay', delayMin > 0 ? `+${delayMin}` : ''));
 
     const countdown = el('span', 'dep-countdown', '');
     if (st.realTime) countdown.append(el('span', 'rt-dot', ''));
@@ -148,7 +168,7 @@ function renderBoard(board) {
     countdown.append(countdownFlap(cdText, oldCd));
     li.append(countdown);
     list.append(li);
-  }
+  });
 
   // Expand toggle: only when there's more to reveal than the collapsed view.
   if (board.expandable) {
@@ -215,14 +235,20 @@ input.addEventListener('input', () => {
   const q = input.value.trim();
   if (q.length < 2) {
     hideSuggestions();
-    renderRecents();
+    showIdle();
     return;
   }
+  hideIdle();
   debounceTimer = setTimeout(() => autocomplete(q), 280);
 });
 
 input.addEventListener('focus', () => {
-  if (input.value.trim().length < 2) renderRecents();
+  hideGhost();
+  if (input.value.trim().length < 2) showIdle();
+});
+
+input.addEventListener('blur', () => {
+  if (input.value.trim().length === 0) showGhost();
 });
 
 document.addEventListener('click', (e) => {
@@ -234,9 +260,92 @@ $('clear-btn').addEventListener('click', () => {
   $('clear-btn').hidden = true;
   hideSuggestions();
   $('routes').hidden = true;
-  renderRecents();
+  showIdle();
   input.focus();
 });
+
+// ---- Split-flap placeholder + quick destinations ----------------------
+const ghost = $('ghost');
+const flapWord = ghost.querySelector('.flap-word');
+const PLACEHOLDERS = ['Where to?', ...QUICK_DESTINATIONS.map((d) => d.label)];
+const REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let ghostTimer = null;
+let ghostIdx = 0;
+
+function startGhost() {
+  if (REDUCE) { flapWord.textContent = 'Where to?'; return; }
+  clearInterval(ghostTimer);
+  ghostTimer = setInterval(() => {
+    flapWord.classList.remove('in');
+    flapWord.classList.add('out');
+    setTimeout(() => {
+      ghostIdx = (ghostIdx + 1) % PLACEHOLDERS.length;
+      flapWord.textContent = PLACEHOLDERS[ghostIdx];
+      flapWord.classList.remove('out');
+      flapWord.classList.add('in');
+    }, 320);
+  }, 2600);
+}
+
+function showGhost() {
+  ghost.classList.remove('hidden');
+  startGhost();
+}
+
+function hideGhost() {
+  ghost.classList.add('hidden');
+  clearInterval(ghostTimer);
+}
+
+// Idle lists = quick-pick favourites + recents (shown when not typing).
+function showIdle() {
+  $('quick').hidden = false;
+  renderRecents();
+}
+
+function hideIdle() {
+  $('quick').hidden = true;
+  $('recents').hidden = true;
+}
+
+function renderQuick() {
+  const wrap = $('quick-chips');
+  wrap.innerHTML = '';
+  for (const d of QUICK_DESTINATIONS) {
+    const chip = el('button', 'chip quick', '');
+    chip.append(el('span', 'chip-pin', ''), document.createTextNode(d.label));
+    chip.addEventListener('click', () => selectQuick(d));
+    wrap.append(chip);
+  }
+}
+
+async function selectQuick(d) {
+  input.value = d.label;
+  $('clear-btn').hidden = false;
+  hideSuggestions();
+  hideIdle();
+  hideGhost();
+  input.blur();
+  try {
+    const dest = await geocodeAddress(d.address);
+    dest.name = d.label;          // show the friendly name in the results title
+    planRoutes(dest);
+  } catch (err) {
+    console.error(err);
+    $('routes').hidden = false;
+    $('routes-title').textContent = `Kon ${d.label} niet vinden`;
+    $('route-cards').innerHTML = '';
+  }
+}
+
+async function geocodeAddress(address) {
+  const res = await fetch(
+    `${API}/geocode?text=${encodeURIComponent(address)}&language=nl&place=${GEOCODE_BIAS}`);
+  const results = await res.json();
+  const r = results.find((x) => x.lat && x.lon) || results[0];
+  if (!r) throw new Error('geocode failed');
+  return { name: r.name, area: areaOf(r), lat: r.lat, lon: r.lon, isStop: r.type === 'STOP' };
+}
 
 async function autocomplete(q) {
   geocodeAbort?.abort();
@@ -345,7 +454,8 @@ function selectDestination(dest) {
   input.value = dest.name;
   $('clear-btn').hidden = false;
   hideSuggestions();
-  $('recents').hidden = true;
+  hideIdle();
+  hideGhost();
   saveRecent(dest);
   input.blur();
   planRoutes(dest);
@@ -363,6 +473,7 @@ async function planRoutes(dest) {
     const head = el('div', 'route-card-head', '');
     head.append(el('span', 'icon', origin.icon), el('h3', '', origin.label));
     if (origin.note) head.append(el('span', 'route-note', origin.note));
+    head.append(mapsLink(origin, dest));
     card.append(head, el('div', 'skeleton', ''), el('div', 'skeleton', ''));
     cardsBox.append(card);
     return card;
@@ -474,19 +585,25 @@ function renderItineraryDetail(it, origin, dest) {
     detail.append(row);
   }
 
-  // Direct Google Maps link for this journey (origin stop → destination, transit).
-  const o = it.legs[0]?.from;
-  const oCoord = o?.lat ? `${o.lat},${o.lon}` : origin.coord;
-  const maps = el('a', 'maps-link', 'Open in Google Maps ↗');
-  maps.href = `https://www.google.com/maps/dir/?api=1`
-    + `&origin=${encodeURIComponent(oCoord)}`
-    + `&destination=${encodeURIComponent(`${dest.lat},${dest.lon}`)}`
-    + `&travelmode=transit`;
-  maps.target = '_blank';
-  maps.rel = 'noopener';
-  detail.append(maps);
-
   return detail;
+}
+
+// Nav-cursor glyph linking the route's origin → destination in Google Maps
+// (transit). Lives in the route-card header; the planner already shows the
+// concrete itineraries, so this is just a quick hand-off to Maps.
+function mapsLink(origin, dest) {
+  const a = el('a', 'maps-link', '');
+  a.href = 'https://www.google.com/maps/dir/?api=1'
+    + `&origin=${encodeURIComponent(origin.coord)}`
+    + `&destination=${encodeURIComponent(`${dest.lat},${dest.lon}`)}`
+    + '&travelmode=transit';
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.setAttribute('aria-label', 'Open in Google Maps');
+  a.title = 'Open in Google Maps';
+  a.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<path d="M12 3 L20 21 L12 16 L4 21 Z" fill="currentColor"/></svg>';
+  return a;
 }
 
 function stopLine(place, verb) {
@@ -665,4 +782,6 @@ if ('serviceWorker' in navigator) {
 spinBrandTiles();
 refreshBoards();
 startAutoRefresh();
-renderRecents();
+renderQuick();
+showIdle();
+showGhost();

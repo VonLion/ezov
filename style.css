@@ -3,21 +3,22 @@
   --card: #ffffff;
   --text: #1c1c2e;
   --text-dim: #70707f;
-  --accent: #3a6df0;          /* board-blue */
-  --accent-soft: #e7edfe;
+  --accent: #14a3a3;          /* teal */
+  --accent-soft: #d8f0ef;
   --border: #e4e4ec;
   --green: #16a34a;
   --red: #dc2626;
-  --subway: #d6231d;
-  --bus: #1d4ed8;
-  --rail: #ffc917;
+  --subway: #d6231d;          /* Metro 53 red */
+  --bus: #14a3a3;             /* teal */
+  --rail: #ffc917;            /* NS yellow */
   --rail-text: #1c1c2e;
   --tram: #0d9488;
   /* Departure-board palette (brand) */
   --board: #1c1b33;
   --board-tile: #0f0e1f;
   --board-seam: #1c1b33;
-  --amber: #ffc64d;
+  --amber: #ffc917;           /* true NS yellow — brand lead */
+  --teal: #14a3a3;
   --board-frame: #3a3960;
   --board-text: #f5f5fa;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
@@ -34,8 +35,8 @@
     --card: #1e1e2c;
     --text: #ececf2;
     --text-dim: #9595a6;
-    --accent: #6b93ff;
-    --accent-soft: #22284a;
+    --accent: #2cc4c4;
+    --accent-soft: #123634;
     --border: #2e2e40;
     --cd-card: #2a2a3e;
     --cd-border: #3a3a52;
@@ -250,6 +251,20 @@ header {
   color: var(--text-dim);
 }
 
+/* Section mode icon (metro / bus / train) — navy tile on the white board */
+.mode-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--board);
+  flex-shrink: 0;
+}
+
+.mode-tile svg { width: 40px; height: auto; display: block; }
+
 .line-badge {
   display: inline-flex;
   align-items: center;
@@ -319,7 +334,18 @@ ul.departures li {
   font-size: 13px;
 }
 
-.dep-delay { color: var(--red); font-size: 13.5px; font-weight: 600; }
+/* Delay column: reserved per board, only as wide as the current view needs
+   (width set in JS; absent entirely when nothing is delayed). */
+.dep-delay {
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  width: var(--delay-w, 0px);
+  text-align: right;
+  overflow: hidden;
+  flex-shrink: 0;
+}
 
 .dep-track {
   font-size: 12px;
@@ -473,7 +499,7 @@ ul.departures li {
 
 #dest-input {
   width: 100%;
-  padding: 14px 44px 14px 16px;
+  padding: 14px 44px 14px 46px;
   font-size: 17px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
@@ -483,6 +509,90 @@ ul.departures li {
 }
 
 #dest-input:focus { border-color: var(--accent); }
+
+/* Bobbing yellow location pin */
+.search-pin {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.search-pin svg { width: 100%; height: 100%; display: block; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .search-pin { animation: pin-bob 2.4s ease-in-out infinite; }
+}
+
+@keyframes pin-bob {
+  50% { transform: translateY(-58%); }
+}
+
+/* Split-flap placeholder ghost, overlaid on the empty input */
+#ghost {
+  position: absolute;
+  left: 46px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  font-size: 17px;
+  color: var(--text-dim);
+  overflow: hidden;
+}
+
+#ghost.hidden { display: none; }
+
+.flap-word {
+  position: relative;
+  display: inline-block;
+  transform-origin: 50% 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .flap-word.out { animation: word-peel 0.32s cubic-bezier(0.4, 0.15, 0.3, 1) both; }
+  .flap-word.in  { animation: word-drop 0.34s cubic-bezier(0.3, 0.7, 0.45, 1) both; }
+}
+
+@keyframes word-peel {
+  0%   { transform: rotateX(0deg); opacity: 1; }
+  100% { transform: rotateX(-90deg); opacity: 0; }
+}
+
+@keyframes word-drop {
+  0%   { transform: rotateX(90deg); opacity: 0; }
+  100% { transform: rotateX(0deg); opacity: 1; }
+}
+
+/* Quick-pick destinations */
+#quick { margin-top: 12px; }
+
+#quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip.quick {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chip.quick .chip-pin {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  margin-right: 6px;
+  vertical-align: 1px;
+}
 
 #clear-btn {
   position: absolute;
@@ -717,19 +827,21 @@ ul.departures li {
   padding: 6px 0 6px 4px;
 }
 
+/* Maps hand-off icon in the route-card header */
 .maps-link {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 8px 14px;
-  background: var(--accent-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   color: var(--accent);
-  border-radius: 999px;
-  font-size: 13.5px;
-  font-weight: 600;
   text-decoration: none;
 }
 
-.maps-link:active { opacity: 0.7; }
+.maps-link svg { width: 20px; height: 20px; display: block; }
+
+.maps-link:active { opacity: 0.6; }
 
 .route-card .status {
   padding: 10px 0 4px;
