@@ -303,27 +303,80 @@ $('clear-btn').addEventListener('click', () => {
   input.focus();
 });
 
-// ---- Split-flap placeholder + quick destinations ----------------------
+// ---- Shared split-flap character row -----------------------------------
+// A row of flap cells that spin forward through the drum to spell a string.
+// Used by the search placeholder (cycling) and the results title.
+const DRUM = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&-?'.";
+const FLAP_STEP_MS = 34;
+
+function makeFlapRow(cols, cls) {
+  const row = el('span', `flaprow${cls ? ` ${cls}` : ''}`, '');
+  const cells = [];
+  for (let i = 0; i < cols; i++) {
+    const node = el('span', 'fcell', '');
+    const bottom = el('span', 'cf cf-bottom', '');
+    const top = el('span', 'cf cf-top', '');
+    node.append(bottom, top);
+    row.append(node);
+    cells.push({ node, bottom, top, cur: ' ', timer: null });
+  }
+  return { row, cells };
+}
+
+function setCellGlyph(cell, ch) {
+  const g = ch === ' ' ? '' : ch;
+  cell.bottom.textContent = g;
+  cell.top.textContent = g;
+}
+
+// Spin one cell forward through the drum from its current glyph to `target`.
+function spinCellTo(cell, target) {
+  const tgt = Math.max(0, DRUM.indexOf(target));
+  clearInterval(cell.timer);
+  if (Math.max(0, DRUM.indexOf(cell.cur)) === tgt) return;
+  cell.timer = setInterval(() => {
+    let ci = Math.max(0, DRUM.indexOf(cell.cur));
+    const old = DRUM[ci];
+    ci = (ci + 1) % DRUM.length;
+    cell.cur = DRUM[ci];
+    setCellGlyph(cell, cell.cur);
+    cell.node.querySelectorAll('.cf-fall').forEach((f) => f.remove());
+    const fall = el('span', 'cf cf-fall', old === ' ' ? '' : old);
+    cell.node.append(fall);
+    fall.addEventListener('animationend', () => fall.remove());
+    if (ci === tgt) clearInterval(cell.timer);
+  }, FLAP_STEP_MS);
+}
+
+function spinRowTo(flap, str) {
+  const s = str.toUpperCase().slice(0, flap.cells.length);
+  flap.cells.forEach((cell, i) => spinCellTo(cell, s[i] || ' '));
+}
+
+function stopRow(flap) { flap.cells.forEach((c) => clearInterval(c.timer)); }
+
+// ---- Search placeholder board ------------------------------------------
 const ghost = $('ghost');
-const flapWord = ghost.querySelector('.flap-word');
-const PLACEHOLDERS = ['Where to?', ...QUICK_DESTINATIONS.map((d) => d.label)];
-const REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const PLACEHOLDERS = ['Where to?', ...QUICK_DESTINATIONS.map((d) => d.label)]
+  .map((s) => s.toUpperCase());
+const FLAP_COLS = Math.max(...PLACEHOLDERS.map((s) => s.length));
+let ghostFlap = null;
 let ghostTimer = null;
 let ghostIdx = 0;
 
 function startGhost() {
-  if (REDUCE) { flapWord.textContent = 'Where to?'; return; }
+  if (!ghostFlap) {
+    ghostFlap = makeFlapRow(FLAP_COLS);
+    ghost.append(ghostFlap.row);
+  }
   clearInterval(ghostTimer);
+  stopRow(ghostFlap);
+  ghostIdx = 0;
+  spinRowTo(ghostFlap, PLACEHOLDERS[0]);
   ghostTimer = setInterval(() => {
-    flapWord.classList.remove('in');
-    flapWord.classList.add('out');
-    setTimeout(() => {
-      ghostIdx = (ghostIdx + 1) % PLACEHOLDERS.length;
-      flapWord.textContent = PLACEHOLDERS[ghostIdx];
-      flapWord.classList.remove('out');
-      flapWord.classList.add('in');
-    }, 320);
-  }, 2600);
+    ghostIdx = (ghostIdx + 1) % PLACEHOLDERS.length;
+    spinRowTo(ghostFlap, PLACEHOLDERS[ghostIdx]);
+  }, 3600);
 }
 
 function showGhost() {
@@ -334,6 +387,17 @@ function showGhost() {
 function hideGhost() {
   ghost.classList.add('hidden');
   clearInterval(ghostTimer);
+  if (ghostFlap) stopRow(ghostFlap);
+}
+
+// Results title rendered as a flap board that spins in from blanks.
+function setRoutesTitle(text) {
+  const h = $('routes-title');
+  h.textContent = '';
+  h.setAttribute('aria-label', text);
+  const flap = makeFlapRow(text.length, 'flaprow-title');
+  h.append(flap.row);
+  requestAnimationFrame(() => spinRowTo(flap, text));
 }
 
 // Idle lists = quick-pick favourites + recents (shown when not typing).
@@ -504,7 +568,7 @@ async function planRoutes(dest) {
   const section = $('routes');
   const cardsBox = $('route-cards');
   section.hidden = false;
-  $('routes-title').textContent = `Naar ${dest.name}`;
+  setRoutesTitle(`Naar ${dest.name}`);
   cardsBox.innerHTML = '';
 
   const cards = ROUTE_ORIGINS.map((origin) => {
@@ -744,7 +808,7 @@ function clockFlap(newText, oldText, boot) {
 
 function spinDigit(cell, bottom, top, targetChar) {
   const target = +targetChar;
-  if (REDUCE || target === 0) { bottom.textContent = top.textContent = targetChar; return; }
+  if (target === 0) { bottom.textContent = top.textContent = targetChar; return; }
   let d = 0;
   bottom.textContent = top.textContent = '0';
   const id = setInterval(() => {
@@ -790,11 +854,7 @@ function spinTile(tile) {
 }
 
 function spinBrandTiles() {
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  document.querySelectorAll('.brand .tile').forEach((tile) => {
-    if (reduce) { setTileGlyph(tile, (tile.dataset.letter || '').toUpperCase()); return; }
-    spinTile(tile);
-  });
+  document.querySelectorAll('.brand .tile').forEach((tile) => spinTile(tile));
 }
 
 $('refresh-btn').addEventListener('click', () => {
