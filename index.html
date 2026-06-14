@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <title>BCP Travel</title>
   <meta name="description" content="Vertrektijden en routes vanaf huis — Gaasperplas, Leerdamhof, Bijlmer ArenA">
-  <meta name="theme-color" content="#1c1b33">
+  <meta name="theme-color" content="#0d0d0f">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
@@ -22,6 +22,13 @@
   <div id="pull-indicator" aria-hidden="true"><div class="spinner"></div></div>
 
   <main id="app">
+    <div class="chassis">
+      <span class="screw" aria-hidden="true"></span>
+      <span class="screw" aria-hidden="true"></span>
+      <span class="screw" aria-hidden="true"></span>
+      <span class="screw" aria-hidden="true"></span>
+      <div class="board-recess">
+
     <header>
       <div class="brand" aria-label="BCP Travel">
         <div class="brand-board">
@@ -136,6 +143,9 @@
 
       <p id="boards-updated"></p>
     </section>
+
+      </div>
+    </div>
   </main>
 
   <script src="app.js"></script>

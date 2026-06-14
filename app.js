@@ -154,12 +154,15 @@ function renderBoard(board) {
     shown = within.length >= board.count ? within : all.slice(0, board.count);
   }
 
-  // Remember the previously shown countdown per row so we can split-flap
-  // only the digits that actually changed on this render.
-  const prevCd = {};
+  // Remember the previously shown clock time per row so the time flaps only
+  // animate the digits that actually changed on this render.
+  const prevTm = {};
   list.querySelectorAll('li[data-key]').forEach((li) => {
-    prevCd[li.dataset.key] = li.dataset.cd;
+    prevTm[li.dataset.key] = li.dataset.tm;
   });
+  // The first render of a board boots up: every time digit spins 0 -> value.
+  const boot = !board._booted;
+  board._booted = true;
 
   // Reserve a delay column only as wide as the current view needs: 0 when
   // everything is on time, otherwise sized to the largest delay shown.
@@ -177,10 +180,11 @@ function renderBoard(board) {
     const delayMin = delays[i];
     const key = st.tripId || `${st.routeShortName}-${st.place.scheduledDeparture}`;
     const cdText = mins === 0 ? 'nu' : `${mins} min`;
+    const tmText = timeFmt.format(sched);
 
     const li = document.createElement('li');
     li.dataset.key = key;
-    li.dataset.cd = cdText;
+    li.dataset.tm = tmText;
 
     const badge = el('span', `line-badge small mode-${st.mode.toLowerCase()}`,
       shortLine(st));
@@ -189,13 +193,15 @@ function renderBoard(board) {
     if (board.showTrack && st.place.track) {
       li.append(el('span', 'dep-track', `spoor ${st.place.track}`));
     }
-    li.append(el('span', 'dep-time', timeFmt.format(sched)));
+    const time = el('span', 'dep-time', '');
+    const oldTm = key in prevTm ? prevTm[key] : null;
+    time.append(clockFlap(tmText, oldTm, boot));
+    li.append(time);
     if (showDelay) li.append(el('span', 'dep-delay', delayMin > 0 ? `+${delayMin}` : ''));
 
     const countdown = el('span', 'dep-countdown', '');
     if (st.realTime) countdown.append(el('span', 'rt-dot', ''));
-    const oldCd = key in prevCd ? prevCd[key] : null;
-    countdown.append(countdownFlap(cdText, oldCd));
+    countdown.append(document.createTextNode(cdText));
     li.append(countdown);
     list.append(li);
   });
@@ -691,59 +697,56 @@ function el(tag, className, text) {
   return node;
 }
 
-// ---- Countdown split-flap (per character) -------------------------------
-// Build a row of little cards for a countdown like "10 min". Each digit and
-// the label is its own card; the number is right-aligned in >=2 slots so the
-// tens digit appears/disappears in place (10 -> 9 peels the leading "1").
-function countdownCells(text) {
-  if (text === 'nu') {
-    return [{ type: 'blank', char: '' }, { type: 'blank', char: '' }, { type: 'label', char: 'nu' }];
-  }
-  const m = text.match(/^(\d+)\s+(\D+)$/);
-  if (!m) return [{ type: 'label', char: text }];
-  const digits = m[1];
-  const slots = Math.max(2, digits.length);
-  const cells = [...digits.padStart(slots, ' ')].map((ch) =>
-    ch === ' ' ? { type: 'blank', char: '' } : { type: 'digit', char: ch });
-  cells.push({ type: 'label', char: m[2] });
-  return cells;
-}
+// ---- Clock split-flap (per digit) ---------------------------------------
+// Render a "HH:MM" time as little amber flaps. On a board's first render
+// (`boot`) every digit spins 0 -> its value; afterwards only changed digits
+// flip. The colon is a plain separator.
+const CLK_SPIN_MS = 110; // ~1s for a 9 (9 steps)
 
-function countdownFlap(newText, oldText) {
-  const row = el('span', 'cd-flap', '');
+function clockFlap(newText, oldText, boot) {
+  const row = el('span', 'clock-flap', '');
   row.setAttribute('aria-label', newText);
   row.setAttribute('role', 'text');
-  const nCells = countdownCells(newText);
-  const oCells = oldText != null ? countdownCells(oldText) : null;
-  const n = nCells.length;
-  for (let i = 0; i < n; i++) {
-    let oldChar = null;
-    if (oCells) {
-      const ri = n - 1 - i;                       // index from the right
-      const o = oCells[oCells.length - 1 - ri];   // aligned right-to-left
-      oldChar = o ? o.char : '';                  // nothing there before -> appears
+  const chars = [...newText];
+  const oldChars = oldText != null ? [...oldText] : null;
+  chars.forEach((ch, i) => {
+    if (!/\d/.test(ch)) {                 // colon (or any non-digit) — separator
+      row.append(el('span', 'sep', ch));
+      return;
     }
-    row.append(flapCell(nCells[i], oldChar));
-  }
+    const cell = el('span', 'cell', '');
+    cell.setAttribute('aria-hidden', 'true');
+    const bottom = el('span', 'cf cf-bottom', ch);
+    const top = el('span', 'cf cf-top', ch);
+    cell.append(bottom, top);
+    if (boot) {
+      spinDigit(cell, bottom, top, ch);
+    } else if (oldChars && oldChars[i] !== ch && /\d/.test(oldChars[i] || '')) {
+      const fall = el('span', 'cf cf-fall', oldChars[i]);
+      cell.append(fall);
+      fall.addEventListener('animationend', () => fall.remove());
+    }
+    row.append(cell);
+  });
   return row;
 }
 
-function flapCell(cell, oldChar) {
-  const node = el('span', `cell cell-${cell.type}${cell.char === '' ? ' blank' : ''}`, '');
-  node.setAttribute('aria-hidden', 'true');
-  node.append(el('span', 'cf cf-bottom', cell.char));
-  const top = el('span', 'cf cf-top', cell.char);
-  node.append(top);
-  if (oldChar != null && oldChar !== cell.char) {
-    if (oldChar === '') {
-      top.classList.add('drop');                  // glyph arriving: drop in
-    } else {
-      const fall = el('span', 'cf cf-fall', oldChar); // glyph leaving: peel down
-      node.append(fall);
-      fall.addEventListener('animationend', () => fall.remove());
-    }
-  }
-  return node;
+function spinDigit(cell, bottom, top, targetChar) {
+  const target = +targetChar;
+  if (REDUCE || target === 0) { bottom.textContent = top.textContent = targetChar; return; }
+  let d = 0;
+  bottom.textContent = top.textContent = '0';
+  const id = setInterval(() => {
+    const old = String(d);
+    d += 1;
+    bottom.textContent = top.textContent = String(d);
+    cell.querySelectorAll('.cf-fall').forEach((f) => f.remove());
+    const fall = el('span', 'cf cf-fall', old);
+    fall.style.animationDuration = '0.1s';
+    cell.append(fall);
+    fall.addEventListener('animationend', () => fall.remove());
+    if (d >= target) clearInterval(id);
+  }, CLK_SPIN_MS);
 }
 
 // ---- Brand tile alphabet spin -------------------------------------------
