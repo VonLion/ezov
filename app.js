@@ -6,18 +6,40 @@
 // ============================================================
 const API = 'https://api.transitous.org/api/v1';
 
+// All NS train product types MOTIS may report at Bijlmer ArenA.
+const RAIL_MODES = new Set([
+  'REGIONAL_RAIL', 'REGIONAL_FAST_RAIL', 'HIGHSPEED_RAIL',
+  'LONG_DISTANCE', 'NIGHT_RAIL', 'RAIL',
+]);
+
 const BOARDS = [
   {
     el: 'board-metro',
     stopId: 'nl-OpenOV_NL:S:30009550', // Station Gaasperplas
     // Gaasperplas is the 53 terminus: every metro departure heads to Centraal.
     filter: (st) => st.mode === 'SUBWAY',
+    n: 16,
+    count: 3,
   },
   {
     el: 'board-bus',
     stopId: 'nl-OpenOV_3980641', // Leerdamhof (returns both quays)
     // "Towards the city" = bus 47 richting Station Bijlmer ArenA.
     filter: (st) => st.mode === 'BUS' && /aren/i.test(st.headsign || ''),
+    n: 16,
+    count: 3,
+  },
+  {
+    el: 'board-train',
+    stopId: 'nl-OpenOV_NL:S:30000559', // Station Bijlmer ArenA
+    // All NS trains, both directions. Times are from now (not the +15 bike
+    // offset) so this board works both at home and standing on the platform.
+    filter: (st) => RAIL_MODES.has(st.mode),
+    n: 120,          // enough departures to cover a full hour of trains
+    count: 5,        // collapsed view
+    expandable: true,
+    windowMin: 60,   // expanded view: everything in the next hour
+    showTrack: true,
   },
 ];
 
@@ -59,42 +81,81 @@ const timeFmt = new Intl.DateTimeFormat('nl-NL', {
 let refreshTimer = null;
 
 async function loadBoard(board) {
-  const card = $(board.el);
-  const list = card.querySelector('.departures');
-  const res = await fetch(`${API}/stoptimes?stopId=${encodeURIComponent(board.stopId)}&n=16`);
+  const res = await fetch(`${API}/stoptimes?stopId=${encodeURIComponent(board.stopId)}&n=${board.n}`);
   if (!res.ok) throw new Error(`stoptimes ${res.status}`);
   const data = await res.json();
 
   const now = Date.now();
-  const deps = (data.stopTimes || [])
+  board._deps = (data.stopTimes || [])
     .filter((st) => !st.cancelled && st.place.pickupType !== 'NOT_ALLOWED' && st.place.departure)
     .filter(board.filter)
-    .filter((st) => new Date(st.place.departure).getTime() >= now - 30_000)
-    .slice(0, 3);
+    .filter((st) => new Date(st.place.departure).getTime() >= now - 30_000);
+
+  renderBoard(board);
+}
+
+function renderBoard(board) {
+  const card = $(board.el);
+  const list = card.querySelector('.departures');
+  const all = board._deps || [];
+  const now = Date.now();
+
+  // Collapsed = next `count`. Expanded = everything in the next `windowMin`,
+  // but never fewer rows than the collapsed view.
+  let shown = all.slice(0, board.count);
+  if (board.expandable && board._expanded) {
+    const cutoff = now + board.windowMin * 60_000;
+    const within = all.filter((st) => new Date(st.place.departure).getTime() <= cutoff);
+    shown = within.length >= board.count ? within : all.slice(0, board.count);
+  }
 
   list.innerHTML = '';
-  for (const st of deps) {
+  for (const st of shown) {
     const dep = new Date(st.place.departure);
     const sched = new Date(st.place.scheduledDeparture);
     const mins = Math.max(0, Math.round((dep - now) / 60000));
     const delayMin = Math.round((dep - sched) / 60000);
 
     const li = document.createElement('li');
-    const badge = el('span', `line-badge small mode-${st.mode.toLowerCase()}`, st.routeShortName || '?');
+    const badge = el('span', `line-badge small mode-${st.mode.toLowerCase()}`,
+      shortLine(st));
     const headsign = el('span', 'dep-headsign', st.headsign || '');
-    const time = el('span', 'dep-time', timeFmt.format(sched));
-    li.append(badge, headsign, time);
+    li.append(badge, headsign);
+    if (board.showTrack && st.place.track) {
+      li.append(el('span', 'dep-track', `spoor ${st.place.track}`));
+    }
+    li.append(el('span', 'dep-time', timeFmt.format(sched)));
     if (delayMin > 0) li.append(el('span', 'dep-delay', `+${delayMin}`));
 
     const countdown = el('span', 'dep-countdown', '');
-    if (st.realTime) {
-      const dot = el('span', 'rt-dot', '');
-      countdown.append(dot);
-    }
+    if (st.realTime) countdown.append(el('span', 'rt-dot', ''));
     countdown.append(document.createTextNode(mins === 0 ? 'nu' : `${mins} min`));
     li.append(countdown);
     list.append(li);
   }
+
+  // Expand toggle: only when there's more to reveal than the collapsed view.
+  if (board.expandable) {
+    const toggle = card.querySelector('.board-expand');
+    const hasMore = all.length > board.count;
+    toggle.hidden = !hasMore;
+    toggle.setAttribute('aria-expanded', String(!!board._expanded));
+    toggle.querySelector('.expand-label').textContent =
+      board._expanded ? 'Minder' : 'Volgend uur';
+  }
+}
+
+// NS product names are long; abbreviate for the badge. Metro/bus keep their
+// line number.
+function shortLine(st) {
+  if (RAIL_MODES.has(st.mode)) {
+    const name = (st.routeShortName || st.routeLongName || '').toLowerCase();
+    if (name.includes('intercity direct')) return 'ICD';
+    if (name.includes('intercity')) return 'IC';
+    if (name.includes('sprinter')) return 'SPR';
+    return 'NS';
+  }
+  return st.routeShortName || '?';
 }
 
 async function refreshBoards() {
@@ -397,6 +458,15 @@ function el(tag, className, text) {
 }
 
 $('refresh-btn').addEventListener('click', refreshBoards);
+
+// Expand/collapse toggles (train board's "Volgend uur").
+for (const board of BOARDS) {
+  if (!board.expandable) continue;
+  $(board.el).querySelector('.board-expand').addEventListener('click', () => {
+    board._expanded = !board._expanded;
+    renderBoard(board);
+  });
+}
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
