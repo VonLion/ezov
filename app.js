@@ -236,10 +236,7 @@ function shortLine(st) {
 }
 
 async function refreshBoards() {
-  const btn = $('refresh-btn');
-  btn.classList.add('spinning');
   const results = await Promise.allSettled(BOARDS.map(loadBoard));
-  btn.classList.remove('spinning');
 
   results.forEach((r, i) => {
     const card = $(BOARDS[i].el);
@@ -311,7 +308,7 @@ function makeFlapRow(cols, cls) {
     const top = el('span', 'cf cf-top', '');
     node.append(bottom, top);
     row.append(node);
-    cells.push({ node, bottom, top, cur: ' ', timer: null });
+    cells.push({ node, bottom, top, cur: ' ', timer: null, start: null });
   }
   return { row, cells };
 }
@@ -346,12 +343,29 @@ function boardText(s) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 }
 
-function spinRowTo(flap, str) {
+// Real flip-boards don't flip everything at once: stagger characters left to
+// right, and rows top to bottom (row offset independent of how many chars the
+// previous row had).
+const CHAR_STAGGER_MS = 1000 / 24;
+const ROW_STAGGER_MS = 200;
+
+function spinRowTo(flap, str, baseDelay = 0) {
   const s = boardText(str).slice(0, flap.cells.length);
-  flap.cells.forEach((cell, i) => spinCellTo(cell, s[i] || ' '));
+  flap.cells.forEach((cell, i) => {
+    clearTimeout(cell.start);
+    const target = s[i] || ' ';
+    cell.start = setTimeout(() => spinCellTo(cell, target), baseDelay + i * CHAR_STAGGER_MS);
+  });
 }
 
-function stopRow(flap) { flap.cells.forEach((c) => clearInterval(c.timer)); }
+// Spin a set of rows (top to bottom) with the row-stagger between their starts.
+function spinRows(pairs) {
+  pairs.forEach(([flap, text], ri) => spinRowTo(flap, text, ri * ROW_STAGGER_MS));
+}
+
+function stopRow(flap) {
+  flap.cells.forEach((c) => { clearTimeout(c.start); clearInterval(c.timer); });
+}
 
 // Lay a string across `rows` board lines of `cols`, breaking at spaces and
 // (failing that) after a hyphen, like text wrapping on a real flip-board.
@@ -400,12 +414,7 @@ function ensureGhost() {
   ghostBoard.forEach((row) => ghost.append(row.row));
 }
 
-// Spin the lower two rows to `text` (word-wrapped); the top row stays put.
-function spinGhostBody(text) {
-  const lines = wrapToBoard(text, GHOST_COLS, 2);
-  spinRowTo(ghostBoard[1], lines[0]);
-  spinRowTo(ghostBoard[2], lines[1]);
-}
+const randomHeader = () => HEADERS[Math.floor(Math.random() * HEADERS.length)];
 
 function showGhost() {
   ensureGhost();
@@ -413,17 +422,21 @@ function showGhost() {
   clearInterval(ghostTimer);
   ghostBoard.forEach(stopRow);
   if (currentDest) {
-    spinRowTo(ghostBoard[0], 'Op reis naar');   // a statement, not a question
-    spinGhostBody(currentDest.name);
+    const [a, b] = wrapToBoard(currentDest.name, GHOST_COLS, 2);
+    spinRows([[ghostBoard[0], 'Op reis naar'], [ghostBoard[1], a], [ghostBoard[2], b]]);
     return;
   }
   ghostIdx = 0;
-  spinRowTo(ghostBoard[0], HEADERS[0]);
-  spinGhostBody(`${DESTINATIONS[0]}?`);
+  const [l0, l1] = wrapToBoard(`${DESTINATIONS[0]}?`, GHOST_COLS, 2);
+  spinRows([[ghostBoard[0], HEADERS[0]], [ghostBoard[1], l0], [ghostBoard[2], l1]]);
   ghostTimer = setInterval(() => {
     ghostIdx += 1;
-    spinRowTo(ghostBoard[0], HEADERS[ghostIdx % HEADERS.length]);
-    spinGhostBody(`${DESTINATIONS[ghostIdx % DESTINATIONS.length]}?`);
+    const [a, b] = wrapToBoard(`${DESTINATIONS[ghostIdx % DESTINATIONS.length]}?`, GHOST_COLS, 2);
+    // The top prompt only changes occasionally; the destinations always do.
+    const rows = [];
+    if (Math.random() < 0.25) rows.push([ghostBoard[0], randomHeader()]);
+    rows.push([ghostBoard[1], a], [ghostBoard[2], b]);
+    spinRows(rows);
   }, 3600);
 }
 
@@ -889,7 +902,8 @@ function spinBrandTiles() {
   document.querySelectorAll('.brand .tile').forEach((tile) => spinTile(tile));
 }
 
-$('refresh-btn').addEventListener('click', () => {
+// The logo doubles as the refresh button (so does pull-to-refresh).
+document.querySelector('.brand').addEventListener('click', () => {
   spinBrandTiles();
   refreshBoards();
 });

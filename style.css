@@ -119,11 +119,14 @@ header {
   padding: 2px;
 }
 
-/* Brand lockup: [B][C][P] Travel */
+/* Brand lockup: [B][C][P] Travel — also the refresh button */
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .brand-board {
@@ -195,21 +198,6 @@ header {
   color: var(--board-text);
 }
 
-#refresh-btn {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid var(--board-frame);
-  color: var(--amber);
-  font-size: 20px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  cursor: pointer;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-#refresh-btn.spinning { animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Split-flap falling motion.
    flap-peel: the OLD glyph's top half is hinged at the seam and falls
