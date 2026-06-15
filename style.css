@@ -576,7 +576,7 @@ ul.departures li {
 
 #dest-input {
   width: 100%;
-  min-height: 64px;
+  min-height: 70px;
   padding: 8px 44px 8px 12px;
   font-size: 17px;
   border: 1.5px solid var(--border);
@@ -670,10 +670,24 @@ ul.departures li {
 .flaprow-title .fcell { width: 15px; height: 24px; border-radius: 3px; }
 .flaprow-title .cf { font-size: 15px; }
 
-/* Two-row placeholder board: bigger cells, full width */
-.flaprow-display { gap: 1px; }
-.flaprow-display .fcell { width: 21px; height: 28px; border-radius: 2px; }
-.flaprow-display .cf { font-size: 18px; }
+/* Two-row board: cells stretch to fill the container width; the font
+   scales with it (size isn't critical here). */
+.flaprow-display {
+  display: flex;
+  width: 100%;
+  gap: 2px;
+  container-type: inline-size;
+}
+
+.flaprow-display .fcell {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  height: 30px;
+  border-radius: 2px;
+}
+
+.flaprow-display .cf { font-size: clamp(13px, 5.4cqw, 22px); }
 
 /* Quick-pick destinations */
 #quick { margin-top: 12px; }

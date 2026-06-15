@@ -296,6 +296,7 @@ document.addEventListener('click', (e) => {
 });
 
 $('clear-btn').addEventListener('click', () => {
+  currentDest = null;
   input.value = '';
   $('clear-btn').hidden = true;
   hideSuggestions();
@@ -359,20 +360,26 @@ function stopRow(flap) { flap.cells.forEach((c) => clearInterval(c.timer)); }
 // Lay a string across `rows` board lines of `cols`, breaking at spaces and
 // (failing that) after a hyphen, like text wrapping on a real flip-board.
 function wrapToBoard(text, cols, rows) {
-  const words = text.toUpperCase().split(/\s+/);
+  // Break opportunities: between words (with a space) and after a hyphen
+  // (without a space), like real text wrapping.
+  const segs = [];
+  text.toUpperCase().split(/\s+/).forEach((word, wi) => {
+    (word.match(/[^-]*-|[^-]+/g) || [word]).forEach((piece, pi) => {
+      segs.push({ text: piece, space: pi === 0 && wi > 0 });
+    });
+  });
   const lines = [];
   let cur = '';
-  for (let w of words) {
-    while (w.length > cols) {
-      const hy = w.lastIndexOf('-', cols - 1);
-      const cut = hy >= 3 ? hy + 1 : cols; // prefer breaking after a hyphen
+  for (const seg of segs) {
+    let piece = seg.text;
+    const sep = cur && seg.space ? ' ' : '';
+    if ((cur + sep + piece).length <= cols) {
+      cur += sep + piece;
+    } else {
       if (cur) { lines.push(cur); cur = ''; }
-      lines.push(w.slice(0, cut));
-      w = w.slice(cut);
+      while (piece.length > cols) { lines.push(piece.slice(0, cols)); piece = piece.slice(cols); }
+      cur = piece;
     }
-    if (!cur) cur = w;
-    else if (`${cur} ${w}`.length <= cols) cur += ` ${w}`;
-    else { lines.push(cur); cur = w; }
   }
   if (cur) lines.push(cur);
   return Array.from({ length: rows }, (_, i) => (lines[i] || '').slice(0, cols));
@@ -386,20 +393,33 @@ const PLACEHOLDERS = ['Where to?', ...QUICK_DESTINATIONS.map((d) => d.label)];
 let ghostBoard = null;
 let ghostTimer = null;
 let ghostIdx = 0;
+let currentDest = null;
+
+function ensureGhost() {
+  if (ghostBoard) return;
+  ghostBoard = Array.from({ length: GHOST_ROWS },
+    () => makeFlapRow(GHOST_COLS, 'flaprow-display'));
+  ghostBoard.forEach((row) => ghost.append(row.row));
+}
 
 function spinGhost(text) {
+  ensureGhost();
   const lines = wrapToBoard(text, GHOST_COLS, GHOST_ROWS);
   ghostBoard.forEach((row, i) => spinRowTo(row, lines[i]));
 }
 
-function startGhost() {
-  if (!ghostBoard) {
-    ghostBoard = Array.from({ length: GHOST_ROWS },
-      () => makeFlapRow(GHOST_COLS, 'flaprow-display'));
-    ghostBoard.forEach((row) => ghost.append(row.row));
-  }
+// The board holds the chosen destination ("Naar X") when one is selected,
+// otherwise it cycles through the suggestions. Same board either way — no
+// separate title.
+function showGhost() {
+  ensureGhost();
+  ghost.classList.remove('hidden');
   clearInterval(ghostTimer);
   ghostBoard.forEach(stopRow);
+  if (currentDest) {
+    spinGhost(`Naar ${currentDest.name}`);
+    return;
+  }
   ghostIdx = 0;
   spinGhost(PLACEHOLDERS[0]);
   ghostTimer = setInterval(() => {
@@ -408,25 +428,10 @@ function startGhost() {
   }, 3600);
 }
 
-function showGhost() {
-  ghost.classList.remove('hidden');
-  startGhost();
-}
-
 function hideGhost() {
   ghost.classList.add('hidden');
   clearInterval(ghostTimer);
   if (ghostBoard) ghostBoard.forEach(stopRow);
-}
-
-// Results title rendered as a flap board that spins in from blanks.
-function setRoutesTitle(text) {
-  const h = $('routes-title');
-  h.textContent = '';
-  h.setAttribute('aria-label', text);
-  const flap = makeFlapRow(text.length, 'flaprow-title');
-  h.append(flap.row);
-  requestAnimationFrame(() => spinRowTo(flap, text));
 }
 
 // Idle lists = quick-pick favourites + recents (shown when not typing).
@@ -451,21 +456,23 @@ function renderQuick() {
 }
 
 async function selectQuick(d) {
-  input.value = d.label;
-  $('clear-btn').hidden = false;
   hideSuggestions();
   hideIdle();
-  hideGhost();
+  input.value = '';
+  $('clear-btn').hidden = false;
   input.blur();
+  currentDest = { name: d.label };   // flap the board to "Naar X" right away
+  showGhost();
   try {
     const dest = await geocodeAddress(d.address);
-    dest.name = d.label;          // show the friendly name in the results title
+    dest.name = d.label;
+    currentDest = dest;
     planRoutes(dest);
   } catch (err) {
     console.error(err);
     $('routes').hidden = false;
-    $('routes-title').textContent = `Kon ${d.label} niet vinden`;
     $('route-cards').innerHTML = '';
+    $('route-cards').append(el('div', 'status error', `Kon ${d.label} niet vinden`));
   }
 }
 
@@ -582,13 +589,14 @@ function renderRecents() {
 // Route planning
 // ============================================================
 function selectDestination(dest) {
-  input.value = dest.name;
+  currentDest = dest;
+  input.value = '';
   $('clear-btn').hidden = false;
   hideSuggestions();
   hideIdle();
-  hideGhost();
   saveRecent(dest);
   input.blur();
+  showGhost();        // board flaps to "Naar X"
   planRoutes(dest);
 }
 
@@ -596,7 +604,6 @@ async function planRoutes(dest) {
   const section = $('routes');
   const cardsBox = $('route-cards');
   section.hidden = false;
-  setRoutesTitle(`Naar ${dest.name}`);
   cardsBox.innerHTML = '';
 
   const cards = ROUTE_ORIGINS.map((origin) => {
