@@ -3,8 +3,8 @@
 Personal PWA for planning trips from home (Amsterdam Zuidoost) with public
 transport. Pure static site — no build step, no backend, no API keys.
 
-The logo is a split-flap departure board
-spelling out the three initials ([logo.svg](logo.svg) / [icon.svg](icon.svg)).
+The logo is a split-flap departure board spelling out BCP
+([logo.svg](logo.svg) / [icon.svg](icon.svg)).
 
 ## Features
 
