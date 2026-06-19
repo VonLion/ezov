@@ -220,6 +220,61 @@ body {
 /* ---- Planes board (In de lucht) ---- */
 .plane-list li { gap: 10px; }
 
+/* Lijst / Kaart toggle in the board header */
+.view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--recess);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.view-toggle .seg {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.view-toggle .seg[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Radar map */
+#plane-map {
+  height: 440px;
+  background: #0b0c10;
+}
+
+.plane-marker .pm {
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.85));
+}
+
+.plane-marker .pm svg { width: 26px; height: 26px; display: block; }
+.plane-marker .pm svg path { fill: var(--amber); stroke: #1a1505; stroke-width: 0.6; }
+
+/* Dark Leaflet popups (Leaflet's own CSS loads at runtime after ours, so
+   these need the #plane-map prefix to win the cascade). */
+#plane-map .leaflet-popup-content-wrapper,
+#plane-map .leaflet-popup-tip {
+  background: var(--card);
+  color: var(--text);
+}
+#plane-map .leaflet-popup-content { font-size: 13px; line-height: 1.5; }
+#plane-map .leaflet-popup-content b { color: var(--text); }
+#plane-map .leaflet-popup-content a { color: var(--accent); font-weight: 700; text-decoration: none; }
+#plane-map a.leaflet-popup-close-button { color: var(--text-dim); }
+
 .plane-badge {
   display: inline-flex;
   align-items: center;

@@ -408,6 +408,9 @@ const PLANES_REFRESH_MS = 15_000;
 const routeCache = new Map();       // callsign -> {from,to} | null (null = no known route)
 let planesTimer = null;
 let activeTab = 'reizen';
+let lastPlanes = [];
+let planeView = 'lijst';
+let planeMap = null, planeLayer = null, youMarker = null, mapPopupOpen = false, leafletLoading = null;
 
 function switchTab(tab) {
   activeTab = tab;
@@ -449,7 +452,9 @@ async function loadPlanes() {
       .filter((a) => typeof a.alt_baro === 'number' && a.lat != null && a.lon != null)
       .sort((x, y) => (x.dst ?? 1e3) - (y.dst ?? 1e3))
       .slice(0, 8);
+    lastPlanes = ac;
     renderPlanes(ac);
+    if (planeView === 'kaart') renderPlaneMarkers(ac);
     card.classList.remove('error');
     ac.forEach((a, i) => setTimeout(() => resolveRoute(a), i * 120));  // stagger route lookups
   } catch (err) {
@@ -479,9 +484,7 @@ function renderPlanes(ac) {
     li.append(info);
 
     const link = el('a', 'fr24-link', 'FR24 ›');
-    link.href = cs
-      ? `https://www.flightradar24.com/${encodeURIComponent(cs)}`
-      : `https://www.flightradar24.com/data/aircraft/${encodeURIComponent(a.r || '')}`;
+    link.href = fr24Url(a);
     link.target = '_blank';
     link.rel = 'noopener';
     li.append(link);
@@ -516,6 +519,91 @@ function applyRoute(cs, route) {
       const r = li.querySelector('.plane-route');
       if (r) r.textContent = `${route.from} → ${route.to}`;
     }
+  });
+}
+
+// ---- Plane radar map (Leaflet + CARTO dark tiles, lazy-loaded) ----------
+const fr24Url = (a) => {
+  const cs = callsignOf(a);
+  return cs
+    ? `https://www.flightradar24.com/${encodeURIComponent(cs)}`
+    : `https://www.flightradar24.com/data/aircraft/${encodeURIComponent(a.r || '')}`;
+};
+const PLANE_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2 L13.5 10.5 L21 14.5 L21 16 L13.5 13.5 L13 19 L15.5 20.8 L15.5 22 L12 20.8 L8.5 22 L8.5 20.8 L11 19 L10.5 13.5 L3 16 L3 14.5 L10.5 10.5 Z"/></svg>';
+
+// Pull Leaflet from the CDN only when the map is first opened.
+function ensureLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (leafletLoading) return leafletLoading;
+  leafletLoading = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.append(css);
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.append(s);
+  });
+  return leafletLoading;
+}
+
+function setPlaneView(v) {
+  planeView = v;
+  $('plane-list').hidden = v !== 'lijst';
+  $('plane-map').hidden = v !== 'kaart';
+  document.querySelectorAll('#plane-view-toggle .seg').forEach((b) =>
+    b.setAttribute('aria-selected', String(b.dataset.view === v)));
+  if (v === 'kaart') showPlaneMap();
+}
+
+async function showPlaneMap() {
+  const host = $('plane-map');
+  try {
+    await ensureLeaflet();
+  } catch {
+    host.textContent = 'Kaart kon niet laden';
+    return;
+  }
+  const c = userCoords || HOME;
+  if (!planeMap) {
+    planeMap = L.map(host, { zoomControl: true, attributionControl: true }).setView([c.lat, c.lon], 10);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd', maxZoom: 18,
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+    }).addTo(planeMap);
+    planeLayer = L.layerGroup().addTo(planeMap);
+    youMarker = L.circleMarker([c.lat, c.lon], {
+      radius: 6, color: '#2bbcbc', weight: 2, fillColor: '#2bbcbc', fillOpacity: 0.9,
+    }).addTo(planeMap);
+    planeMap.on('popupopen', () => { mapPopupOpen = true; });
+    planeMap.on('popupclose', () => { mapPopupOpen = false; });
+  } else {
+    youMarker.setLatLng([c.lat, c.lon]);
+  }
+  setTimeout(() => planeMap.invalidateSize(), 0);   // it was hidden until now
+  renderPlaneMarkers(lastPlanes);
+}
+
+function renderPlaneMarkers(ac) {
+  if (!planeLayer || mapPopupOpen) return;   // don't yank an open popup out from under a tap
+  planeLayer.clearLayers();
+  ac.forEach((a) => {
+    if (a.lat == null || a.lon == null) return;
+    const cs = callsignOf(a);
+    const cached = cs && routeCache.get(cs);
+    const route = cached ? `${cached.from} → ${cached.to}` : (a.desc || a.t || cs || '?');
+    const meta = [cs, a.t, `${fmtAlt(a.alt_baro)}${altTrend(a) ? ` ${altTrend(a)}` : ''}`]
+      .filter(Boolean).join(' · ');
+    const icon = L.divIcon({
+      className: 'plane-marker',
+      html: `<div class="pm" style="transform:rotate(${Math.round(a.track || 0)}deg)">${PLANE_SVG}</div>`,
+      iconSize: [26, 26], iconAnchor: [13, 13],
+    });
+    L.marker([a.lat, a.lon], { icon }).addTo(planeLayer)
+      .bindPopup(`<b>${route}</b><br>${meta}<br>`
+        + `<a href="${fr24Url(a)}" target="_blank" rel="noopener">Flightradar24 ›</a>`);
   });
 }
 
@@ -1342,6 +1430,11 @@ document.querySelectorAll('#mode-toggle .seg').forEach((b) => {
 // Bottom tab bar: Reizen <-> In de lucht.
 document.querySelectorAll('#tabbar .tab').forEach((b) => {
   b.addEventListener('click', () => switchTab(b.dataset.tab));
+});
+
+// Planes board: list <-> map view.
+document.querySelectorAll('#plane-view-toggle .seg').forEach((b) => {
+  b.addEventListener('click', () => setPlaneView(b.dataset.view));
 });
 
 document.addEventListener('visibilitychange', () => {

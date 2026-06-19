@@ -7,7 +7,7 @@
   <meta name="description" content="Vertrektijden en routes vanaf huis — Gaasperplas, Leerdamhof, Bijlmer ArenA">
   <meta name="theme-color" content="#0d0d0f">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=28">
+  <link rel="stylesheet" href="style.css?v=29">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <link rel="icon" href="icons/icon-192.png">
   <!-- iOS PWA -->
@@ -168,8 +168,13 @@
             <h2>In de lucht</h2>
             <p class="board-sub" id="planes-sub">boven Zuidoost &middot; dichtstbij eerst</p>
           </div>
+          <div class="view-toggle" id="plane-view-toggle" role="tablist" aria-label="Lijst of kaart">
+            <button class="seg" type="button" data-view="lijst" aria-selected="true">Lijst</button>
+            <button class="seg" type="button" data-view="kaart" aria-selected="false">Kaart</button>
+          </div>
         </div>
-        <ul class="departures plane-list" data-empty="Geen vliegtuigen in de buurt"></ul>
+        <ul class="departures plane-list" id="plane-list" data-empty="Geen vliegtuigen in de buurt"></ul>
+        <div id="plane-map" hidden></div>
       </div>
     </div>
 
@@ -187,6 +192,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>
