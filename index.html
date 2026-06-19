@@ -7,7 +7,7 @@
   <meta name="description" content="Vertrektijden en routes vanaf huis — Gaasperplas, Leerdamhof, Bijlmer ArenA">
   <meta name="theme-color" content="#0d0d0f">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <link rel="icon" href="icons/icon-192.png">
   <!-- iOS PWA -->
@@ -56,6 +56,31 @@
 
     <!-- Departure boards -->
     <section id="boards">
+      <div id="mode-bar">
+        <div id="mode-toggle" role="tablist" aria-label="Thuis of naar huis">
+          <button class="seg" type="button" data-mode="home" aria-selected="true">Thuis</button>
+          <button class="seg" type="button" data-mode="return" aria-selected="false">Naar huis</button>
+        </div>
+      </div>
+
+      <!-- Return board: fastest ways home from the current location -->
+      <div class="board" id="board-home" hidden>
+        <div class="board-head">
+          <span class="mode-tile" aria-label="Naar huis">
+            <svg viewBox="0 0 52 44" aria-hidden="true">
+              <path d="M10 25 L26 10 L42 25" fill="none" stroke="#2bbcbc" stroke-width="3" stroke-linejoin="round"/>
+              <rect x="15" y="24" width="22" height="14" fill="none" stroke="#2bbcbc" stroke-width="2.6"/>
+              <rect x="23" y="29" width="6" height="9" fill="#2bbcbc"/>
+            </svg>
+          </span>
+          <div class="board-title">
+            <h2>Naar huis</h2>
+            <p class="board-sub" id="home-sub">vanaf je locatie</p>
+          </div>
+        </div>
+        <ul class="departures" data-empty="Zet locatie aan voor routes naar huis"></ul>
+      </div>
+
       <div class="board" id="board-metro">
         <div class="board-head">
           <span class="mode-tile" aria-label="Metro">
@@ -132,6 +157,6 @@
     </div>
   </main>
 
-  <script src="app.js?v=25"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>

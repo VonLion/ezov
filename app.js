@@ -255,8 +255,136 @@ async function refreshBoards() {
 function startAutoRefresh() {
   clearInterval(refreshTimer);
   refreshTimer = setInterval(() => {
-    if (document.visibilityState === 'visible') refreshBoards();
+    if (document.visibilityState === 'visible') refreshActive();
   }, REFRESH_MS);
+}
+
+// ============================================================
+// Home vs return mode (geolocation)
+// Near home -> the three "leaving home" boards. Away -> a "Naar huis" board
+// that plans the fastest ways home from wherever you are. A toggle overrides
+// the auto-detect for the session.
+// ============================================================
+const HOME = { lat: 52.305, lon: 4.975 };   // home neighbourhood (no house number)
+const HOME_RADIUS_M = 1300;                  // ~15 min walk
+const HOME_BOARDS = ['board-metro', 'board-bus', 'board-train'];
+let mode = 'home';
+let manualMode = null;     // set by the toggle; overrides auto-detect this session
+let userCoords = null;
+let homeBooted = false;
+
+function haversine(a, b) {
+  const R = 6371000, rad = (d) => d * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+  const s = Math.sin(dLat / 2) ** 2
+    + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function updateToggleUI() {
+  document.querySelectorAll('#mode-toggle .seg').forEach((b) =>
+    b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
+}
+
+function applyMode(m) {
+  mode = m;
+  const home = m === 'home';
+  HOME_BOARDS.forEach((id) => { $(id).hidden = !home; });
+  $('board-home').hidden = home;
+  updateToggleUI();
+  if (home) refreshBoards(); else loadReturnBoard();
+}
+
+function refreshActive() {
+  if (mode === 'return') loadReturnBoard(); else refreshBoards();
+}
+
+// Pick home/return from the device location, unless the toggle has overridden it.
+function locateAndSetMode() {
+  if (manualMode) { applyMode(manualMode); return; }
+  if (!navigator.geolocation) { applyMode('home'); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      if (!manualMode) applyMode(haversine(userCoords, HOME) <= HOME_RADIUS_M ? 'home' : 'return');
+    },
+    () => { if (!manualMode) applyMode('home'); },   // denied / unavailable: stay home
+    { timeout: 8000, maximumAge: 60_000 },
+  );
+}
+
+async function loadReturnBoard() {
+  const card = $('board-home');
+  const list = card.querySelector('.departures');
+  if (!userCoords) {                 // need a fix first; ask, then re-enter
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { userCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude }; loadReturnBoard(); },
+        () => { list.innerHTML = ''; list.dataset.empty = 'Zet locatie aan voor routes naar huis'; },
+        { timeout: 8000, maximumAge: 60_000 });
+    } else {
+      list.innerHTML = ''; list.dataset.empty = 'Locatie niet beschikbaar';
+    }
+    return;
+  }
+  try {
+    const url = `${API}/plan?fromPlace=${userCoords.lat},${userCoords.lon}`
+      + `&toPlace=${HOME.lat},${HOME.lon}`
+      + `&time=${encodeURIComponent(new Date().toISOString())}&numItineraries=6`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`plan ${res.status}`);
+    const data = await res.json();
+    renderReturnBoard(data.itineraries || []);
+    card.classList.remove('error');
+    $('boards-updated').textContent = `Bijgewerkt om ${timeFmt.format(new Date())}`;
+  } catch (err) {
+    console.error(err);
+    list.innerHTML = ''; list.dataset.empty = 'Kon routes naar huis niet laden';
+  }
+}
+
+function renderReturnBoard(itineraries) {
+  const card = $('board-home');
+  const list = card.querySelector('.departures');
+  const now = Date.now();
+  const trips = itineraries
+    .map((it) => ({ it, transit: it.legs.filter((l) => l.mode !== 'WALK') }))
+    .filter((t) => t.transit.length > 0)
+    .slice(0, 3);
+
+  const boot = !homeBooted; homeBooted = true;
+
+  if (trips.length) {
+    const board0 = trips[0].transit[0];
+    $('home-sub').textContent = `vanaf ${cleanStop(board0.from?.name || 'je locatie')}`;
+  }
+
+  list.innerHTML = '';
+  trips.forEach(({ transit }) => {
+    const first = transit[0];
+    const last = transit[transit.length - 1];
+    const dep = new Date(first.startTime);
+    const mins = Math.max(0, Math.round((dep - now) / 60000));
+    const li = document.createElement('li');
+
+    transit.forEach((leg, i) => {
+      if (i > 0) li.append(el('span', 'leg-sep', '›'));
+      li.append(el('span', `line-badge small mode-${leg.mode.toLowerCase()}`, shortLine(leg)));
+    });
+    li.append(el('span', 'dep-headsign', cleanStop(last.to?.name) || 'naar huis'));
+
+    const time = el('span', 'dep-time', '');
+    time.append(clockFlap(timeFmt.format(dep), null, boot));
+    li.append(time);
+
+    const cd = el('span', 'dep-countdown', '');
+    if (first.realTime) cd.append(el('span', 'rt-dot', ''));
+    cd.append(document.createTextNode(countdownText(mins)));
+    li.append(cd);
+
+    list.append(li);
+  });
+  if (!trips.length) { list.dataset.empty = 'Geen route naar huis gevonden'; }
 }
 
 // ============================================================
@@ -811,7 +939,7 @@ document.addEventListener('touchend', async () => {
   pullStartY = null;
   const indicator = $('pull-indicator');
   if (indicator.classList.contains('visible')) {
-    await refreshBoards();
+    await refreshActive();
     indicator.classList.remove('visible');
   }
 });
@@ -1059,7 +1187,7 @@ function startLogoClock() {
 $('logo-board').addEventListener('click', () => {
   spinLogo();
   if (!ghost.classList.contains('hidden')) showGhost(2);
-  refreshBoards();
+  refreshActive();
 });
 
 // Expand/collapse toggles (train board's "Volgend uur").
@@ -1071,9 +1199,14 @@ for (const board of BOARDS) {
   });
 }
 
+// Home / return toggle — a manual choice sticks for the session.
+document.querySelectorAll('#mode-toggle .seg').forEach((b) => {
+  b.addEventListener('click', () => { manualMode = b.dataset.mode; applyMode(manualMode); });
+});
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    refreshBoards();
+    locateAndSetMode();
     startAutoRefresh();
   }
 });
@@ -1085,8 +1218,9 @@ if ('serviceWorker' in navigator) {
 buildLogoBoard();
 spinLogo();
 startLogoClock();
-refreshBoards();
+applyMode('home');       // instant home view; locateAndSetMode may flip to return
 startAutoRefresh();
 renderQuick();
 showIdle();
-showGhost(2);   // continue the logo's wave into the search rows
+showGhost(2);            // continue the logo's wave into the search rows
+locateAndSetMode();
