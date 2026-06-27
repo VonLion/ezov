@@ -1,0 +1,269 @@
+{
+  "generated": "2026-06-24",
+  "home": "Amsterdam Zuidoost (Bijlmer)",
+  "window": { "start": "2026-06-23", "end": "2026-07-19" },
+  "weeks": [
+    {
+      "label": "Mon 22 – Sun 28 Jun",
+      "start": "2026-06-22",
+      "end": "2026-06-28",
+      "items": [
+        {
+          "name": "Havendagen Terneuzen",
+          "url": "https://havendagenterneuzen.nl/",
+          "start": "2026-06-26",
+          "end": "2026-06-28",
+          "day_label": "Fri–Sun",
+          "location": "Terneuzen, Zeeland",
+          "travel_time": "~2h45",
+          "themes": ["water", "zeeland"],
+          "free": null,
+          "note": "Harbour weekend with boats and quayside fun; far end of Zeeland, so only if you fancy the drive.",
+          "emoji": "⛵"
+        },
+        {
+          "name": "Amsterdam Roots Festival",
+          "url": "https://www.amsterdamroots.nl/",
+          "start": "2026-06-28",
+          "end": "2026-06-28",
+          "day_label": "Sun",
+          "location": "Oosterpark, Amsterdam Oost",
+          "travel_time": "~15 min",
+          "themes": ["culture"],
+          "free": true,
+          "note": "Free open-air day of music, dance & circus with 10+ workshops; all ages welcome.",
+          "emoji": "🎪"
+        }
+      ]
+    },
+    {
+      "label": "Mon 29 Jun – Sun 5 Jul",
+      "start": "2026-06-29",
+      "end": "2026-07-05",
+      "items": [
+        {
+          "name": "Keti Koti in het Noorderpark",
+          "url": "https://www.kidsproof.nl/amsterdam/uitje/noorderpark-keti-koti/",
+          "start": "2026-07-01",
+          "end": "2026-07-01",
+          "day_label": "Wed",
+          "location": "Noorderpark, Amsterdam Noord",
+          "travel_time": "~25 min",
+          "themes": ["culture"],
+          "free": true,
+          "note": "Songs, live bands, dance, stories and a Caribbean neighbourhood market.",
+          "emoji": "🥁"
+        },
+        {
+          "name": "Carnaval der Dieren",
+          "url": "https://www.kinderboerderijbrinkie.nl/2025/05/23/zondag-29-juni-komt-het-kunstfestival-carnaval-der-dieren-weer-naar-brinkie/",
+          "start": "2026-07-04",
+          "end": "2026-07-04",
+          "day_label": "Sat",
+          "location": "Kinderboerderij 't Brinkie, Holendrecht (Amsterdam Zuidoost)",
+          "travel_time": "~5–10 min",
+          "themes": ["nature", "animals", "culture", "local"],
+          "free": true,
+          "note": "Free open-air children's art festival built around animals, 4th edition. Local highlight; times/details to follow on Brinkie's site & Facebook.",
+          "emoji": "🐾🎨"
+        },
+        {
+          "name": "Bello Festival",
+          "url": "https://www.stoomtram.nl/bellofestival/",
+          "start": "2026-07-03",
+          "end": "2026-07-05",
+          "day_label": "Fri–Sun",
+          "location": "Museumstoomtram Hoorn–Medemblik",
+          "travel_time": "~40 min",
+          "themes": ["trains", "water"],
+          "free": null,
+          "note": "Steam trams, a steam express train and the historic boat MS Friesland for '50 years Historic Triangle', with kids' activities in Hoorn.",
+          "emoji": "🚂⛵"
+        },
+        {
+          "name": "Festival TREK",
+          "url": "https://www.kidsproof.nl/amsterdam/uitje/festival-trek-amstelpark-zomervakantie/",
+          "start": "2026-07-03",
+          "end": "2026-07-05",
+          "day_label": "Fri–Sun",
+          "location": "Amstelpark, Amsterdam Zuid",
+          "travel_time": "~15 min",
+          "themes": ["outdoors", "food"],
+          "free": true,
+          "note": "Big travelling food festival in a very kid-friendly park (playground & animals); free entry.",
+          "emoji": "🍴"
+        },
+        {
+          "name": "Vrije Vogel Festival",
+          "url": "https://www.vrijevogelfestival.nl/",
+          "days": ["2026-07-05"],
+          "day_label": "Sun",
+          "location": "Various Amsterdam locations",
+          "travel_time": "~20–30 min",
+          "themes": ["culture"],
+          "free": true,
+          "ongoing": true,
+          "note": "Free outdoor children's theatre with bird-mask workshops and a daily parade; ages 2–12.",
+          "emoji": "🐦"
+        }
+      ]
+    },
+    {
+      "label": "Mon 6 – Sun 12 Jul",
+      "start": "2026-07-06",
+      "end": "2026-07-12",
+      "items": [
+        {
+          "name": "Havendagen Zeewolde",
+          "url": "https://www.puurzeewolde.nl/havendagen-zeewolde",
+          "start": "2026-07-10",
+          "end": "2026-07-12",
+          "day_label": "Fri–Sun",
+          "location": "Aanloophaven, Zeewolde",
+          "travel_time": "~40 min",
+          "themes": ["water"],
+          "free": true,
+          "note": "Free harbour days with a vlootschouw (boat parade) and maritime demos right on the water.",
+          "emoji": "⛵"
+        },
+        {
+          "name": "Kwaku Summer Festival",
+          "url": "https://kwakufestival.nl/",
+          "start": "2026-07-11",
+          "end": "2026-07-12",
+          "day_label": "Sat–Sun",
+          "location": "Nelson Mandelapark, Amsterdam Zuidoost",
+          "travel_time": "~5 min",
+          "themes": ["culture", "local"],
+          "free": true,
+          "note": "Opening weekend of Zuidoost's big, warm multicultural festival: music, dance and Surinamese/Caribbean food. Go early afternoon with little ones. Local highlight.",
+          "emoji": "🎉"
+        },
+        {
+          "name": "Landelijke Open Imkerijdagen",
+          "url": "https://www.bijenhouders.nl/bijen-houden/landelijke-open-imkerijdagen/",
+          "start": "2026-07-11",
+          "end": "2026-07-12",
+          "day_label": "Sat–Sun",
+          "location": "Beekeepers across NL (incl. near Amsterdam)",
+          "travel_time": "varies",
+          "themes": ["nature", "animals"],
+          "free": true,
+          "note": "Meet a beekeeper and peek into the hives, 10:00–16:00.",
+          "emoji": "🐝"
+        },
+        {
+          "name": "Vrije Vogel Festival",
+          "url": "https://www.vrijevogelfestival.nl/",
+          "days": ["2026-07-06", "2026-07-08", "2026-07-11"],
+          "day_label": "Mon/Wed/Sat",
+          "location": "Various Amsterdam locations",
+          "travel_time": "~20–30 min",
+          "themes": ["culture"],
+          "free": true,
+          "ongoing": true,
+          "note": "Free outdoor children's theatre, workshops and a daily parade; ages 2–12.",
+          "emoji": "🐦"
+        }
+      ]
+    },
+    {
+      "label": "Mon 13 – Sun 19 Jul",
+      "start": "2026-07-13",
+      "end": "2026-07-19",
+      "items": [
+        {
+          "name": "Visserijdagen Bruinisse",
+          "url": "https://www.visserijdagen-bruinisse.nl/",
+          "start": "2026-07-16",
+          "end": "2026-07-18",
+          "day_label": "Thu–Sat",
+          "location": "Bruinisse, Zeeland",
+          "travel_time": "~2h",
+          "themes": ["water", "zeeland"],
+          "free": null,
+          "note": "A half-century-old fishing-village festival full of harbour, boats and folklore.",
+          "emoji": "⚓"
+        },
+        {
+          "name": "Monnickendammer Visdagen",
+          "url": "https://monnickendammervisdagen.nl/",
+          "start": "2026-07-17",
+          "end": "2026-07-17",
+          "day_label": "Fri",
+          "location": "Binnenhaven, Monnickendam",
+          "travel_time": "~25 min",
+          "themes": ["water"],
+          "free": true,
+          "note": "Old-Dutch fishing-heritage day: traditional children's games, herring smoking, clog & net makers; 11:00–17:00.",
+          "emoji": "🐟"
+        },
+        {
+          "name": "Kwaku Summer Festival",
+          "url": "https://kwakufestival.nl/",
+          "start": "2026-07-18",
+          "end": "2026-07-19",
+          "day_label": "Sat–Sun",
+          "location": "Nelson Mandelapark, Amsterdam Zuidoost",
+          "travel_time": "~5 min",
+          "themes": ["culture", "local"],
+          "free": true,
+          "note": "Weekend 2 of the festival.",
+          "emoji": "🎉"
+        },
+        {
+          "name": "Vrije Vogel Festival",
+          "url": "https://www.vrijevogelfestival.nl/",
+          "days": ["2026-07-15", "2026-07-16", "2026-07-18"],
+          "day_label": "Wed/Thu/Sat",
+          "location": "Various Amsterdam locations",
+          "travel_time": "~20–30 min",
+          "themes": ["culture"],
+          "free": true,
+          "ongoing": true,
+          "note": "Free outdoor children's theatre and a daily parade; ages 2–12.",
+          "emoji": "🐦"
+        }
+      ]
+    }
+  ],
+  "radar": [
+    {
+      "name": "De Kinderparade (Theaterfestival de Parade)",
+      "url": "https://www.kidsproof.nl/amsterdam/uitje/de-kinderparade-theaterfestival/",
+      "start": "2026-07-24",
+      "end": "2026-08-09",
+      "date_label": "From Fri 24 Jul",
+      "location": "Martin Luther Kingpark, Amsterdam",
+      "travel_time": "~15 min",
+      "themes": ["culture"],
+      "note": "Masses of kids' activities through early August.",
+      "emoji": "🎭"
+    },
+    {
+      "name": "Junior Grachtenfestival",
+      "url": "https://www.kidsproof.nl/amsterdam/uitje/stichting-grachtenfestival-junior-grachtenfestival-zomer-buiten-muziekeu/",
+      "start": "2026-08-08",
+      "end": "2026-08-16",
+      "date_label": "August",
+      "location": "Across Amsterdam",
+      "travel_time": "varies",
+      "themes": ["culture", "music"],
+      "note": "Playful kids' music programme across the city (exact dates to confirm closer to the time).",
+      "emoji": "🎶"
+    },
+    {
+      "name": "Zeeuwse Vliegdagen",
+      "url": "https://www.zeeuwsevliegdagen.nl/",
+      "start": "2026-08-14",
+      "end": "2026-08-15",
+      "date_label": "Fri–Sat 14–15 Aug",
+      "location": "Vliegveld Midden-Zeeland, Arnemuiden",
+      "travel_time": "~2h15",
+      "themes": ["aviation", "zeeland"],
+      "price": "€6 adults, €3 kids 4–12, under-4 free",
+      "note": "A proper family airshow: Coast Guard & rescue-helicopter demos, gliders, gyrocopters, skydivers and static aircraft to climb around. Worth the trip.",
+      "emoji": "✈️"
+    }
+  ]
+}

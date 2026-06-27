@@ -409,8 +409,10 @@ const routeCache = new Map();       // callsign -> {from,to} | null (null = no k
 let planesTimer = null;
 let activeTab = 'reizen';
 let lastPlanes = [];
-let planeView = 'lijst';
-let planeMap = null, planeLayer = null, youMarker = null, mapPopupOpen = false, leafletLoading = null;
+let planeView = 'kaart';
+let selectedPlane = null;
+let ghostMode = 'search';   // persistent ghost board: 'search' (Reizen) | 'planes' (selected flight)
+let planeMap = null, planeLayer = null, youMarker = null, rangeRing = null, mapFitted = false, leafletLoading = null;
 
 function switchTab(tab) {
   activeTab = tab;
@@ -418,7 +420,20 @@ function switchTab(tab) {
   $('tab-lucht').hidden = tab !== 'lucht';
   document.querySelectorAll('#tabbar .tab').forEach((b) =>
     b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
-  if (tab === 'lucht') { loadPlanes(); startPlanesRefresh(); } else { stopPlanesRefresh(); }
+  const machine = document.querySelector('.machine');
+  if (tab === 'lucht') {
+    machine.classList.add('planes');   // bottom flap rows now show the selected flight
+    ghostMode = 'planes';
+    showPlaneInfo(selectedPlane);
+    loadPlanes();
+    setPlaneView(planeView);           // defaults to the map
+    startPlanesRefresh();
+  } else {
+    machine.classList.remove('planes');
+    ghostMode = 'search';
+    showGhost();
+    stopPlanesRefresh();
+  }
 }
 
 function startPlanesRefresh() {
@@ -455,6 +470,10 @@ async function loadPlanes() {
     lastPlanes = ac;
     renderPlanes(ac);
     if (planeView === 'kaart') renderPlaneMarkers(ac);
+    if (ghostMode === 'planes' && selectedPlane) {     // keep the flap board live
+      const upd = ac.find((a) => a.hex === selectedPlane.hex);
+      if (upd) { selectedPlane = upd; showPlaneInfo(upd); }
+    }
     card.classList.remove('error');
     ac.forEach((a, i) => setTimeout(() => resolveRoute(a), i * 120));  // stagger route lookups
   } catch (err) {
@@ -471,6 +490,9 @@ function renderPlanes(ac) {
     const label = cs || a.r || a.hex || '?';
     const li = document.createElement('li');
     li.dataset.cs = cs;
+    li.dataset.hex = a.hex;
+    if (selectedPlane && a.hex === selectedPlane.hex) li.classList.add('selected');
+    li.addEventListener('click', (e) => { if (!e.target.closest('.fr24-link')) selectPlane(a); });
 
     li.append(el('span', 'plane-badge', airlineTag(label)));
 
@@ -508,7 +530,10 @@ async function resolveRoute(a) {
       } else { return; }   // transient (429/5xx): leave uncached, retry next refresh
     } catch { return; }
   }
-  if (route) applyRoute(cs, route);
+  if (route) {
+    applyRoute(cs, route);
+    if (ghostMode === 'planes' && selectedPlane && callsignOf(selectedPlane) === cs) showPlaneInfo(selectedPlane);
+  }
 }
 
 const cityOf = (ap) => (ap ? (ap.municipality || ap.iata_code || ap.name || '') : '');
@@ -573,38 +598,95 @@ async function showPlaneMap() {
       subdomains: 'abcd', maxZoom: 18,
       attribution: '&copy; OpenStreetMap &copy; CARTO',
     }).addTo(planeMap);
+    rangeRing = L.circle([c.lat, c.lon], {       // 1 km "nearly overhead" reference
+      radius: 1000, color: '#2bbcbc', weight: 1.5, opacity: 0.55,
+      fillColor: '#2bbcbc', fillOpacity: 0.05,
+    }).addTo(planeMap);
     planeLayer = L.layerGroup().addTo(planeMap);
     youMarker = L.circleMarker([c.lat, c.lon], {
-      radius: 6, color: '#2bbcbc', weight: 2, fillColor: '#2bbcbc', fillOpacity: 0.9,
+      radius: 5, color: '#2bbcbc', weight: 2, fillColor: '#2bbcbc', fillOpacity: 0.9,
     }).addTo(planeMap);
-    planeMap.on('popupopen', () => { mapPopupOpen = true; });
-    planeMap.on('popupclose', () => { mapPopupOpen = false; });
   } else {
     youMarker.setLatLng([c.lat, c.lon]);
+    rangeRing.setLatLng([c.lat, c.lon]);
   }
   setTimeout(() => planeMap.invalidateSize(), 0);   // it was hidden until now
   renderPlaneMarkers(lastPlanes);
 }
 
 function renderPlaneMarkers(ac) {
-  if (!planeLayer || mapPopupOpen) return;   // don't yank an open popup out from under a tap
+  if (!planeLayer) return;
   planeLayer.clearLayers();
   ac.forEach((a) => {
     if (a.lat == null || a.lon == null) return;
-    const cs = callsignOf(a);
-    const cached = cs && routeCache.get(cs);
-    const route = cached ? `${cached.from} → ${cached.to}` : (a.desc || a.t || cs || '?');
-    const meta = [cs, a.t, `${fmtAlt(a.alt_baro)}${altTrend(a) ? ` ${altTrend(a)}` : ''}`]
-      .filter(Boolean).join(' · ');
+    const sel = selectedPlane && a.hex === selectedPlane.hex;
+    const low = a.alt_baro < 10000;                 // the ones we care about most: bigger, opaque
+    const scale = sel ? 1.3 : (low ? 1 : 0.62);
+    const opacity = sel ? 1 : (low ? 1 : 0.5);
     const icon = L.divIcon({
       className: 'plane-marker',
-      html: `<div class="pm" style="transform:rotate(${Math.round(a.track || 0)}deg)">${PLANE_SVG}</div>`,
+      html: `<div class="pm${sel ? ' sel' : ''}" `
+        + `style="transform:rotate(${Math.round(a.track || 0)}deg) scale(${scale});opacity:${opacity}">`
+        + `${PLANE_SVG}</div>`,
       iconSize: [26, 26], iconAnchor: [13, 13],
     });
-    L.marker([a.lat, a.lon], { icon }).addTo(planeLayer)
-      .bindPopup(`<b>${route}</b><br>${meta}<br>`
-        + `<a href="${fr24Url(a)}" target="_blank" rel="noopener">Flightradar24 ›</a>`);
+    const m = L.marker([a.lat, a.lon], { icon }).addTo(planeLayer).on('click', () => selectPlane(a));
+    if (sel) m.setZIndexOffset(1000);
   });
+  // First time we have planes, frame them all (then leave the user's view alone).
+  if (!mapFitted && ac.length) {
+    const pts = ac.filter((a) => a.lat != null).map((a) => [a.lat, a.lon]);
+    pts.push([youMarker.getLatLng().lat, youMarker.getLatLng().lng]);
+    planeMap.fitBounds(L.latLngBounds(pts).pad(0.15), { maxZoom: 11 });
+    mapFitted = true;
+  }
+}
+
+// ---- Selected flight on the machine's bottom flap rows ------------------
+const fmtAltShort = (ft) => `${Math.round(ft)}FT`;
+
+// City for the flap board: Amsterdam -> AMS, strip parentheticals/slashes.
+const flapCity = (name) =>
+  /amsterdam/i.test(name) ? 'AMS' : (name || '').split('(')[0].split('/')[0].trim();
+
+// "FROM-TO" trimmed to fit one 12-cell row.
+function planeRouteLine(plane) {
+  const r = routeCache.get(callsignOf(plane));
+  if (!r) return '';
+  let from = flapCity(r.from).toUpperCase();
+  let to = flapCity(r.to).toUpperCase();
+  let s = `${from}-${to}`;
+  if (s.length > GHOST_COLS) {
+    const over = s.length - GHOST_COLS;
+    if (from.length >= to.length) from = from.slice(0, Math.max(3, from.length - over));
+    else to = to.slice(0, Math.max(3, to.length - over));
+    s = `${from}-${to}`.slice(0, GHOST_COLS);
+  }
+  return s;
+}
+
+// Repurpose the machine's bottom three flap rows to show the selected flight.
+function showPlaneInfo(plane) {
+  ensureGhost();
+  ghost.classList.remove('hidden');
+  clearInterval(ghostTimer);
+  ghostBoard.forEach(stopRow);
+  if (!plane) {
+    spinRows([[ghostBoard[0], 'Tik een'], [ghostBoard[1], 'vliegtuig'], [ghostBoard[2], 'op de kaart']]);
+    return;
+  }
+  const cs = callsignOf(plane) || plane.r || '';
+  const route = planeRouteLine(plane) || plane.desc || plane.t || '';
+  const typeAlt = [plane.t, fmtAltShort(plane.alt_baro)].filter(Boolean).join(' ');
+  spinRows([[ghostBoard[0], cs], [ghostBoard[1], route], [ghostBoard[2], typeAlt]]);
+}
+
+function selectPlane(a) {
+  selectedPlane = a;
+  showPlaneInfo(a);
+  if (planeView === 'kaart') renderPlaneMarkers(lastPlanes);   // re-highlight
+  document.querySelectorAll('#plane-list li').forEach((li) =>
+    li.classList.toggle('selected', li.dataset.hex === a.hex));
 }
 
 function refreshCurrent() { if (activeTab === 'lucht') loadPlanes(); else refreshActive(); }
@@ -631,9 +713,14 @@ input.addEventListener('input', () => {
 });
 
 input.addEventListener('focus', () => {
-  switchTab('reizen');   // searching is a travel action; results live on this tab
+  if (activeTab !== 'reizen') switchTab('reizen');   // searching is a travel action
   hideGhost();
   if (input.value.trim().length < 2) showIdle();
+});
+
+// On the planes tab the flap area shows the selected flight; tapping it follows in FR24.
+document.querySelector('.search-wrap').addEventListener('click', () => {
+  if (activeTab === 'lucht' && selectedPlane) window.open(fr24Url(selectedPlane), '_blank', 'noopener');
 });
 
 input.addEventListener('blur', () => {

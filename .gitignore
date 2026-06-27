@@ -7,3 +7,6 @@
 # Python
 __pycache__/
 *.pyc
+
+# Local autopush tooling (not for publishing)
+tooling/

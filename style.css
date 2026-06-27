@@ -262,6 +262,15 @@ body {
 
 .plane-marker .pm svg { width: 26px; height: 26px; display: block; }
 .plane-marker .pm svg path { fill: var(--amber); stroke: #1a1505; stroke-width: 0.6; }
+.plane-marker .pm.sel svg path { fill: var(--accent); stroke: #06201f; }
+.plane-marker .pm.sel { filter: drop-shadow(0 0 5px rgba(43, 188, 188, 0.95)); }
+
+/* Selected list row */
+.plane-list li.selected { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* On the planes tab the search field is inert; the flap area follows in FR24 */
+.machine.planes #dest-input { pointer-events: none; }
+.machine.planes .search-wrap { cursor: pointer; }
 
 /* Dark Leaflet popups (Leaflet's own CSS loads at runtime after ours, so
    these need the #plane-map prefix to win the cascade). */
