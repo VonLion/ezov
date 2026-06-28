@@ -254,6 +254,22 @@ body {
   background: #0b0c10;
 }
 
+/* Planes tab fills the window — no page scroll; the map takes the spare height. */
+body.lucht { overflow: hidden; }
+
+body.lucht #app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 60px);   /* clear the fixed tab bar */
+}
+
+body.lucht .chassis { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+body.lucht #tab-lucht { flex: 1; min-height: 0; display: flex; }
+body.lucht #board-planes { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+body.lucht #plane-map { flex: 1; height: auto; min-height: 0; }
+body.lucht #plane-list { flex: 1; min-height: 0; overflow-y: auto; }
+
 /* Flightradar24 link shown under the map after selecting a plane */
 #fr24-link {
   display: block;

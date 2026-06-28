@@ -342,7 +342,7 @@ function locateAndSetMode() {
   applyMode(decideMode());
   fetchRoughLocation().then(() => {
     if (!manualMode && decideMode() !== mode) applyMode(decideMode());
-    if (activeTab === 'lucht') loadPlanes();   // re-centre planes on the refined location
+    if (activeTab === 'lucht') { recenterPlaneMap(); loadPlanes(); }
   });
 }
 
@@ -430,11 +430,11 @@ let lastPlanes = [];
 let planeView = 'kaart';
 let selectedPlane = null;
 let ghostMode = 'search';   // persistent ghost board: 'search' (Reizen) | 'planes' (selected flight)
-let planeMap = null, planeLayer = null, youMarker = null, rangeRing = null, mapFitted = false, leafletLoading = null;
-let trail = [], trailLine = null, trailTimer = null;
+let planeMap = null, planeLayer = null, youMarker = null, rangeRing = null, leafletLoading = null;
 
 function switchTab(tab) {
   activeTab = tab;
+  document.body.classList.toggle('lucht', tab === 'lucht');   // full-height map layout
   $('tab-reizen').hidden = tab !== 'reizen';
   $('tab-lucht').hidden = tab !== 'lucht';
   $('tab-uitjes').hidden = tab !== 'uitjes';
@@ -452,7 +452,6 @@ function switchTab(tab) {
   }
   machine.classList.remove('planes');
   stopPlanesRefresh();
-  stopTrail();
   if (tab === 'uitjes') {
     ghostMode = 'uitjes';        // flap board cycles the event short names
     showUitjesSuggestions();
@@ -629,7 +628,6 @@ function setPlaneView(v) {
     selectedPlane = null;
     showPlaneInfo(null);
     updateFr24(null);
-    stopTrail();
   }
 }
 
@@ -643,12 +641,12 @@ async function showPlaneMap() {
   }
   const c = userCoords || HOME;
   if (!planeMap) {
-    planeMap = L.map(host, { zoomControl: true, attributionControl: true }).setView([c.lat, c.lon], 10);
+    planeMap = L.map(host, { zoomControl: true, attributionControl: true }).setView([c.lat, c.lon], 11);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd', maxZoom: 18,
       attribution: '&copy; OpenStreetMap &copy; CARTO',
     }).addTo(planeMap);
-    rangeRing = L.layerGroup([     // radar range rings: 1 / 5 / 10 km
+    rangeRing = L.layerGroup([     // radar range rings: 1 / 5 / 10 km, centred on you/home
       L.circle([c.lat, c.lon], { radius: 10000, color: '#2bbcbc', weight: 1, opacity: 0.28, fill: false }),
       L.circle([c.lat, c.lon], { radius: 5000, color: '#2bbcbc', weight: 1, opacity: 0.35, fill: false }),
       L.circle([c.lat, c.lon], { radius: 1000, color: '#2bbcbc', weight: 1.5, opacity: 0.6, fillColor: '#2bbcbc', fillOpacity: 0.06 }),
@@ -658,12 +656,23 @@ async function showPlaneMap() {
       radius: 5, color: '#2bbcbc', weight: 2, fillColor: '#2bbcbc', fillOpacity: 0.9,
     }).addTo(planeMap);
   } else {
-    youMarker.setLatLng([c.lat, c.lon]);
-    rangeRing.eachLayer((l) => l.setLatLng([c.lat, c.lon]));
+    recenterPlaneMap();
   }
-  setTimeout(() => planeMap.invalidateSize(), 0);   // it was hidden until now
+  setTimeout(() => {     // the map was hidden until now; size it, then frame the rings
+    planeMap.invalidateSize();
+    planeMap.fitBounds(L.latLng(c.lat, c.lon).toBounds(26000), { padding: [6, 6] });
+  }, 0);
   renderPlaneMarkers(lastPlanes);
   if (!selectedPlane) autoSelectClosestLow();       // default to the closest low flyer
+}
+
+// Keep the rings + you-dot on the current location (or home), e.g. after the
+// IP lookup resolves.
+function recenterPlaneMap() {
+  if (!planeMap) return;
+  const c = userCoords || HOME;
+  youMarker.setLatLng([c.lat, c.lon]);
+  rangeRing.eachLayer((l) => l.setLatLng([c.lat, c.lon]));
 }
 
 function renderPlaneMarkers(ac) {
@@ -687,13 +696,6 @@ function renderPlaneMarkers(ac) {
     const m = L.marker([a.lat, a.lon], { icon }).addTo(planeLayer).on('click', () => selectPlane(a));
     if (sel) m.setZIndexOffset(1000);
   });
-  // First time we have planes, frame them all (then leave the user's view alone).
-  if (!mapFitted && ac.length) {
-    const pts = ac.filter((a) => a.lat != null).map((a) => [a.lat, a.lon]);
-    pts.push([youMarker.getLatLng().lat, youMarker.getLatLng().lng]);
-    planeMap.fitBounds(L.latLngBounds(pts).pad(0.15), { maxZoom: 11 });
-    mapFitted = true;
-  }
 }
 
 // ---- Selected flight on the machine's bottom flap rows ------------------
@@ -739,7 +741,6 @@ function selectPlane(a) {
   selectedPlane = a;
   showPlaneInfo(a);
   updateFr24(a);
-  startTrail(a);
   if (planeView === 'kaart') renderPlaneMarkers(lastPlanes);   // re-highlight
   document.querySelectorAll('#plane-list li').forEach((li) =>
     li.classList.toggle('selected', li.dataset.hex === a.hex));
@@ -756,51 +757,6 @@ function updateFr24(plane) {
   } else {
     link.hidden = true;
   }
-}
-
-// ---- Live trail of the selected plane -----------------------------------
-// The source has no browser-readable history, so we build the trail ourselves
-// by polling the selected hex every few seconds and drawing the path.
-function startTrail(a) {
-  stopTrail();
-  trail = (a.lat != null) ? [[a.lat, a.lon]] : [];
-  drawTrail();
-  trailTimer = setInterval(pollSelectedPlane, 5000);
-}
-
-function stopTrail() {
-  clearInterval(trailTimer); trailTimer = null;
-  trail = [];
-  if (trailLine && planeMap) planeMap.removeLayer(trailLine);
-  trailLine = null;
-}
-
-function drawTrail() {
-  if (!planeMap) return;
-  if (trailLine) planeMap.removeLayer(trailLine);
-  trailLine = trail.length > 1
-    ? L.polyline(trail, { color: '#2bbcbc', weight: 2, opacity: 0.6 }).addTo(planeMap)
-    : null;
-}
-
-async function pollSelectedPlane() {
-  if (!selectedPlane || activeTab !== 'lucht' || planeView !== 'kaart') return;
-  try {
-    const res = await fetch(`https://api.airplanes.live/v2/hex/${selectedPlane.hex}`);
-    const a = (await res.json()).ac?.[0];
-    if (!a || a.lat == null) return;
-    selectedPlane = { ...selectedPlane, ...a };
-    const last = trail[trail.length - 1];
-    if (!last || last[0] !== a.lat || last[1] !== a.lon) {
-      trail.push([a.lat, a.lon]);
-      if (trail.length > 120) trail.shift();
-      drawTrail();
-    }
-    const idx = lastPlanes.findIndex((p) => p.hex === selectedPlane.hex);
-    if (idx >= 0) lastPlanes[idx] = selectedPlane;
-    renderPlaneMarkers(lastPlanes);
-    showPlaneInfo(selectedPlane);   // live altitude on the flap
-  } catch { /* ignore */ }
 }
 
 // lastPlanes is sorted by distance, so the first low flyer is the closest one.
