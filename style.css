@@ -408,8 +408,12 @@ body {
   gap: 8px;
 }
 
-/* Maps link always pins to the bottom-right, whether or not there's a chip. */
-.uitjes-right .maps-link { margin-top: auto; }
+/* Action icons (website + maps) pin to the bottom-right, whether or not there's a chip. */
+.uitjes-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 2px;
+}
 
 .uitjes-price {
   font-size: 10.5px;

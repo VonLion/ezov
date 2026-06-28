@@ -281,6 +281,7 @@ let mode = 'home';
 let manualMode = null;     // set by the toggle; overrides auto-detect this session
 let userCoords = null;
 let homeBooted = false;
+let locating = false;
 
 function haversine(a, b) {
   const R = 6371000, rad = (d) => d * Math.PI / 180;
@@ -308,32 +309,48 @@ function refreshActive() {
   if (mode === 'return') loadReturnBoard(); else refreshBoards();
 }
 
-// Pick home/return from the device location, unless the toggle has overridden it.
-function locateAndSetMode() {
-  if (manualMode) { applyMode(manualMode); return; }
-  if (!navigator.geolocation) { applyMode('home'); return; }
+// Last-known location, so the app works on load without waiting on a prompt.
+function loadCachedCoords() {
+  try {
+    const c = JSON.parse(localStorage.getItem('bcp-coords'));
+    if (c && typeof c.lat === 'number') userCoords = { lat: c.lat, lon: c.lon };
+  } catch { /* ignore */ }
+}
+
+// One geolocation request at a time, and cache the fix. iOS won't make the
+// permission permanent for a home-screen PWA, so we ask at most once per load
+// and reuse the cached position everywhere else.
+function requestLocation(done) {
+  if (!navigator.geolocation || locating) { if (done) done(); return; }
+  locating = true;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
+      locating = false;
       userCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-      if (!manualMode) applyMode(haversine(userCoords, HOME) <= HOME_RADIUS_M ? 'home' : 'return');
+      try { localStorage.setItem('bcp-coords', JSON.stringify({ ...userCoords, t: Date.now() })); } catch { /* ignore */ }
+      if (done) done();
     },
-    () => { if (!manualMode) applyMode('home'); },   // denied / unavailable: stay home
-    { timeout: 8000, maximumAge: 60_000 },
+    () => { locating = false; if (done) done(); },
+    { timeout: 8000, maximumAge: 600_000 },
   );
+}
+
+const decideMode = () =>
+  (userCoords && haversine(userCoords, HOME) > HOME_RADIUS_M) ? 'return' : 'home';
+
+// Apply the cached-coords decision immediately, then refine with one request.
+function locateAndSetMode() {
+  if (manualMode) { applyMode(manualMode); return; }
+  applyMode(decideMode());
+  requestLocation(() => { if (!manualMode && decideMode() !== mode) applyMode(decideMode()); });
 }
 
 async function loadReturnBoard() {
   const card = $('board-home');
   const list = card.querySelector('.departures');
-  if (!userCoords) {                 // need a fix first; ask, then re-enter
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => { userCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude }; loadReturnBoard(); },
-        () => { list.innerHTML = ''; list.dataset.empty = 'Zet locatie aan voor routes naar huis'; },
-        { timeout: 8000, maximumAge: 60_000 });
-    } else {
-      list.innerHTML = ''; list.dataset.empty = 'Locatie niet beschikbaar';
-    }
+  if (!userCoords) {                 // no fix yet; request once, then re-enter
+    list.innerHTML = ''; list.dataset.empty = 'Zet locatie aan voor routes naar huis';
+    requestLocation(() => { if (userCoords && mode === 'return') loadReturnBoard(); });
     return;
   }
   try {
@@ -432,10 +449,15 @@ function switchTab(tab) {
     return;
   }
   machine.classList.remove('planes');
-  ghostMode = 'search';
-  showGhost();
   stopPlanesRefresh();
-  if (tab === 'uitjes') loadFamily();
+  if (tab === 'uitjes') {
+    ghostMode = 'uitjes';        // flap board cycles the event short names
+    showUitjesSuggestions();
+    loadFamily();
+  } else {
+    ghostMode = 'search';
+    showGhost();
+  }
 }
 
 function startPlanesRefresh() {
@@ -471,11 +493,7 @@ async function loadPlanes() {
       .slice(0, 8);
     lastPlanes = ac;
     renderPlanes(ac);
-    if (planeView === 'kaart') renderPlaneMarkers(ac);
-    if (ghostMode === 'planes' && selectedPlane) {     // keep the flap board live
-      const upd = ac.find((a) => a.hex === selectedPlane.hex);
-      if (upd) { selectedPlane = upd; showPlaneInfo(upd); }
-    }
+    if (planeView === 'kaart') { renderPlaneMarkers(ac); syncSelection(ac); }
     card.classList.remove('error');
     ac.forEach((a, i) => setTimeout(() => resolveRoute(a), i * 120));  // stagger route lookups
   } catch (err) {
@@ -493,8 +511,8 @@ function renderPlanes(ac) {
     const li = document.createElement('li');
     li.dataset.cs = cs;
     li.dataset.hex = a.hex;
-    if (selectedPlane && a.hex === selectedPlane.hex) li.classList.add('selected');
-    li.addEventListener('click', (e) => { if (!e.target.closest('.fr24-link')) selectPlane(a); });
+    // The list never "selects" (the flap board stays blank here); the FR24 chip
+    // is the only action.
 
     li.append(el('span', 'plane-badge', airlineTag(label)));
 
@@ -582,7 +600,12 @@ function setPlaneView(v) {
   $('plane-map').hidden = v !== 'kaart';
   document.querySelectorAll('#plane-view-toggle .seg').forEach((b) =>
     b.setAttribute('aria-selected', String(b.dataset.view === v)));
-  if (v === 'kaart') showPlaneMap();
+  if (v === 'kaart') {
+    showPlaneMap();
+  } else {                              // list never selects -> blank flap board
+    selectedPlane = null;
+    showPlaneInfo(null);
+  }
 }
 
 async function showPlaneMap() {
@@ -614,6 +637,7 @@ async function showPlaneMap() {
   }
   setTimeout(() => planeMap.invalidateSize(), 0);   // it was hidden until now
   renderPlaneMarkers(lastPlanes);
+  if (!selectedPlane) autoSelectClosestLow();       // default to the closest low flyer
 }
 
 function renderPlaneMarkers(ac) {
@@ -673,8 +697,8 @@ function showPlaneInfo(plane) {
   ghost.classList.remove('hidden');
   clearInterval(ghostTimer);
   ghostBoard.forEach(stopRow);
-  if (!plane) {
-    spinRows([[ghostBoard[0], 'Tik een'], [ghostBoard[1], 'vliegtuig'], [ghostBoard[2], 'op de kaart']]);
+  if (!plane) {                          // nothing selected -> blank rows
+    spinRows([[ghostBoard[0], ''], [ghostBoard[1], ''], [ghostBoard[2], '']]);
     return;
   }
   const cs = callsignOf(plane) || plane.r || '';
@@ -689,6 +713,22 @@ function selectPlane(a) {
   if (planeView === 'kaart') renderPlaneMarkers(lastPlanes);   // re-highlight
   document.querySelectorAll('#plane-list li').forEach((li) =>
     li.classList.toggle('selected', li.dataset.hex === a.hex));
+}
+
+// lastPlanes is sorted by distance, so the first low flyer is the closest one.
+function autoSelectClosestLow() {
+  const pick = lastPlanes.find((a) => a.alt_baro < 10000) || lastPlanes[0];
+  if (pick) selectPlane(pick);
+}
+
+// On the map: keep the user's pick fresh, re-pick if it left, else default-select.
+function syncSelection(ac) {
+  if (selectedPlane) {
+    const upd = ac.find((a) => a.hex === selectedPlane.hex);
+    if (upd) { selectedPlane = upd; showPlaneInfo(upd); return; }
+    selectedPlane = null;
+  }
+  autoSelectClosestLow();
 }
 
 function refreshCurrent() { if (activeTab === 'lucht') loadPlanes(); else refreshActive(); }
@@ -715,6 +755,7 @@ async function loadFamily() {
     if (!res.ok) throw new Error(`family ${res.status}`);
     familyData = await res.json();
     renderFamily();
+    if (activeTab === 'uitjes') showUitjesSuggestions();   // cycle the loaded short names
   } catch (err) {
     console.error(err);
     root.innerHTML = '';
@@ -768,11 +809,60 @@ function familyCard(it, isRadar) {
   const right = el('div', 'uitjes-right', '');
   const chip = priceChip(it);
   if (chip) right.append(el('span', `uitjes-price ${chip.cls}`, chip.text));
-  right.append(mapsLinkFor(it.location));
+  const actions = el('div', 'uitjes-actions', '');
+  if (it.url) actions.append(siteLinkFor(it.url));   // opens the site in the real browser
+  actions.append(mapsLinkFor(it.location));
+  right.append(actions);
   card.append(right);
 
-  if (it.url) card.addEventListener('click', () => window.open(it.url, '_blank', 'noopener'));
+  // Tapping the card plans a route there (like a Reizen quick-pick).
+  card.addEventListener('click', () => planUitje(it));
   return card;
+}
+
+// Plan a route to this outing on the Reizen tab, using its short name.
+function planUitje(it) {
+  const label = (it.short && it.short.join(' ').trim()) || it.name;
+  switchTab('reizen');
+  selectQuick({ label, address: it.location || it.name });
+}
+
+// External-link icon (real browser, new tab) — same teal styling as maps links.
+function siteLinkFor(url) {
+  const a = el('a', 'maps-link', '');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.setAttribute('aria-label', 'Open website');
+  a.title = 'Open website';
+  a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M14 4h6v6"/><path d="M20 4 L10 14"/>'
+    + '<path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/></svg>';
+  a.addEventListener('click', (e) => e.stopPropagation());
+  return a;
+}
+
+// Event short names (2-line) for the flap-board suggestions, deduped.
+function familyEntries() {
+  if (!familyData) return [];
+  const seen = new Set();
+  const out = [];
+  const add = (it) => {
+    if (!it.short) return;
+    const key = it.short.join('|');
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push([it.short[0] || '', `${it.short[1] || ''}?`]);
+  };
+  (familyData.weeks || []).forEach((w) => (w.items || []).forEach(add));
+  (familyData.radar || []).forEach(add);
+  return out;
+}
+
+function showUitjesSuggestions() {
+  const entries = familyEntries();
+  cycleGhost(entries.length ? entries : destEntries());
 }
 
 function familySection(title, range, items, isRadar) {
@@ -978,30 +1068,39 @@ function ensureGhost() {
 
 const randomHeader = () => HEADERS[Math.floor(Math.random() * HEADERS.length)];
 
-// `baseRow` (2 on first load / reload) continues the logo's top-to-bottom
-// wave into the search rows; other calls just animate the rows on their own.
-function showGhost(baseRow = 0) {
+// Cycle a list of 2-line entries through the board (rotating header on top).
+function cycleGhost(entries, baseRow = 0) {
   ensureGhost();
   ghost.classList.remove('hidden');
   clearInterval(ghostTimer);
   ghostBoard.forEach(stopRow);
+  if (!entries.length) return;
+  ghostIdx = 0;
+  spinRows([[ghostBoard[0], HEADERS[0]], [ghostBoard[1], entries[0][0]], [ghostBoard[2], entries[0][1]]], baseRow);
+  ghostTimer = setInterval(() => {
+    ghostIdx += 1;
+    const e = entries[ghostIdx % entries.length];
+    const rows = [];
+    if (Math.random() < 0.25) rows.push([ghostBoard[0], randomHeader()]);   // header changes occasionally
+    rows.push([ghostBoard[1], e[0]], [ghostBoard[2], e[1]]);
+    spinRows(rows);
+  }, 3600);
+}
+
+const destEntries = () => DESTINATIONS.map((d) => wrapToBoard(`${d}?`, GHOST_COLS, 2));
+
+// `baseRow` (2 on first load / reload) continues the logo's top-to-bottom wave.
+function showGhost(baseRow = 0) {
   if (currentDest) {
+    ensureGhost();
+    ghost.classList.remove('hidden');
+    clearInterval(ghostTimer);
+    ghostBoard.forEach(stopRow);
     const [a, b] = wrapToBoard(currentDest.name, GHOST_COLS, 2);
     spinRows([[ghostBoard[0], 'Op reis naar'], [ghostBoard[1], a], [ghostBoard[2], b]], baseRow);
     return;
   }
-  ghostIdx = 0;
-  const [l0, l1] = wrapToBoard(`${DESTINATIONS[0]}?`, GHOST_COLS, 2);
-  spinRows([[ghostBoard[0], HEADERS[0]], [ghostBoard[1], l0], [ghostBoard[2], l1]], baseRow);
-  ghostTimer = setInterval(() => {
-    ghostIdx += 1;
-    const [a, b] = wrapToBoard(`${DESTINATIONS[ghostIdx % DESTINATIONS.length]}?`, GHOST_COLS, 2);
-    // The top prompt only changes occasionally; the destinations always do.
-    const rows = [];
-    if (Math.random() < 0.25) rows.push([ghostBoard[0], randomHeader()]);
-    rows.push([ghostBoard[1], a], [ghostBoard[2], b]);
-    spinRows(rows);
-  }, 3600);
+  cycleGhost(destEntries(), baseRow);
 }
 
 function hideGhost() {
@@ -1643,7 +1742,7 @@ document.querySelectorAll('#plane-view-toggle .seg').forEach((b) => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    locateAndSetMode();
+    refreshActive();        // reuse the cached location; don't re-prompt on every refocus
     startAutoRefresh();
   }
 });
@@ -1655,9 +1754,9 @@ if ('serviceWorker' in navigator) {
 buildLogoBoard();
 spinLogo();
 startLogoClock();
-applyMode('home');       // instant home view; locateAndSetMode may flip to return
+loadCachedCoords();      // use last-known location immediately (no prompt)
 startAutoRefresh();
 renderQuick();
 showIdle();
 showGhost(2);            // continue the logo's wave into the search rows
-locateAndSetMode();
+locateAndSetMode();      // applies cached decision now, refines with one request

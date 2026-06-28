@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'bcp-v31';
+const CACHE = 'bcp-v32';
 const SHELL = [
   './',
   './index.html',
