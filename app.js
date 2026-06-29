@@ -432,7 +432,31 @@ let selectedPlane = null;
 let ghostMode = 'search';   // persistent ghost board: 'search' (Reizen) | 'planes' (selected flight)
 let planeMap = null, planeLayer = null, youMarker = null, rangeRing = null, leafletLoading = null;
 
-function switchTab(tab) {
+// ---- URL routing: /reizen /lucht /uitjes (clean paths via the 404 trick) ----
+const TABS = ['reizen', 'lucht', 'uitjes'];
+
+// The app may be served from "/" (bcptravel.nl) or a sub-path; the base is the
+// pathname minus a trailing tab segment.
+function appBase() {
+  const parts = location.pathname.split('/');
+  if (TABS.includes(parts[parts.length - 1])) parts.pop();
+  let base = parts.join('/');
+  if (!base.endsWith('/')) base += '/';
+  return base;
+}
+
+function tabFromPath() {
+  const last = location.pathname.split('/').filter(Boolean).pop();
+  return TABS.includes(last) ? last : 'reizen';
+}
+
+function pushTab(tab) {
+  const path = tab === 'reizen' ? appBase() : appBase() + tab;
+  if (location.pathname !== path) history.pushState({ tab }, '', path);
+}
+
+function switchTab(tab, push = true) {
+  if (push) pushTab(tab);
   activeTab = tab;
   document.body.classList.toggle('lucht', tab === 'lucht');   // full-height map layout
   $('tab-reizen').hidden = tab !== 'reizen';
@@ -524,7 +548,7 @@ function renderPlanes(ac) {
     const routeText = cached ? `${cached.from} → ${cached.to}` : (a.desc || a.t || label);
     info.append(el('div', 'plane-route', routeText));
     info.append(el('div', 'plane-meta',
-      [KIND_LABEL[planeKind(a)], label, a.t, `${fmtAlt(a.alt_baro)}${altTrend(a) ? ` ${altTrend(a)}` : ''}`, fmtKm(a.dst ?? 0)]
+      [planeLabel(a), label, a.t, `${fmtAlt(a.alt_baro)}${altTrend(a) ? ` ${altTrend(a)}` : ''}`, fmtKm(a.dst ?? 0)]
         .filter(Boolean).join(' · ')));
     li.append(info);
 
@@ -598,6 +622,26 @@ function planeKind(a) {
 }
 
 const KIND_LABEL = { jet: '', ga: 'Klein', heli: 'Heli', glider: 'Zweef', misc: 'Overig' };
+
+// Aircraft type-code -> kind, used to label planes that broadcast no category
+// (those still draw the GA icon, but we name them as accurately as we can).
+const TYPE_KIND = (() => {
+  const m = {};
+  const add = (kind, codes) => codes.split(' ').forEach((c) => { m[c] = kind; });
+  add('heli', 'EC20 EC25 EC30 EC35 EC45 EC55 EC75 H125 H130 H135 H145 H155 H160 H175 AS50 AS55 AS65 A109 A119 A139 A149 A169 A189 B06 B06T B407 B412 B427 B429 B430 B505 R22 R44 R66 S61 S76 S92 S70 EH10 EXPL GAZL LYNX MI8 PUMA H500');
+  add('glider', 'AS33 ARCU DUOD DISC VENT NIMB JS1 JS3 LS8 DG1T DG40 SF25 G103 DIMO PISI');
+  add('ga', 'C150 C152 C162 C172 C175 C177 C182 C185 C206 C207 C210 C72R C82R P28A P28B P28R P28T P32R PA18 PA22 PA24 PA28 PA32 PA34 PA38 PA44 PA46 DA40 DA42 DA20 DV20 SR20 SR22 M20P M20T BE33 BE35 BE36 BE58 BE76 BE19 BE23 AA5 AA1 TB10 TB20 TB21 RV6 RV7 RV8 RV9 RV10 RV14 TOBA RALL F406 GROB G115 DR40 ROBN C42 VL3 PC12 TBM7 TBM8 TBM9 C208 B350 BE20 BE9L PC6T');
+  add('jet', 'B737 B738 B739 B38M A319 A320 A321 A20N A21N A318 B752 B763 B772 B77W B788 B789 A332 A333 A359 E170 E190 E195 E290 E295 CRJ2 CRJ7 CRJ9 C25A C25B C25C C500 C510 C525 C550 C560 C56X C680 C68A C700 CL30 CL35 CL60 GLF4 GLF5 GLF6 GL7T FA7X FA8X F2TH FA50 E55P E50P LJ45 LJ60 LJ75 H25B PC24');
+  return m;
+})();
+const kindFromType = (t) => TYPE_KIND[(t || '').toUpperCase()] || null;
+
+// List label: trust the category; for the GA-fallback ("misc") planes, refine
+// the label from the type code (icon stays the GA plane).
+function planeLabel(a) {
+  const k = planeKind(a);
+  return KIND_LABEL[k === 'misc' ? (kindFromType(a.t) || 'misc') : k];
+}
 
 // Pull Leaflet from the CDN only when the map is first opened.
 function ensureLeaflet() {
@@ -1780,6 +1824,9 @@ document.querySelectorAll('#tabbar .tab').forEach((b) => {
   b.addEventListener('click', () => switchTab(b.dataset.tab));
 });
 
+// Browser back/forward -> follow the URL (don't push a new entry).
+window.addEventListener('popstate', () => switchTab(tabFromPath(), false));
+
 // Planes board: list <-> map view.
 document.querySelectorAll('#plane-view-toggle .seg').forEach((b) => {
   b.addEventListener('click', () => setPlaneView(b.dataset.view));
@@ -1805,3 +1852,8 @@ renderQuick();
 showIdle();
 showGhost(2);            // continue the logo's wave into the search rows
 locateAndSetMode();      // applies cached decision now, refines with one request
+
+// Open on the tab named in the URL (/lucht, /uitjes); default is reizen.
+const startTab = tabFromPath();
+history.replaceState({ tab: startTab }, '', startTab === 'reizen' ? appBase() : appBase() + startTab);
+if (startTab !== 'reizen') switchTab(startTab, false);

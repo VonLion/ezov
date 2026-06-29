@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'bcp-v35';
+const CACHE = 'bcp-v36';
 const SHELL = [
   './',
   './index.html',
@@ -33,6 +33,17 @@ self.addEventListener('fetch', (e) => {
 
   // Live data: never cache.
   if (url.origin !== self.location.origin) return;
+
+  // SPA navigations (e.g. /lucht, /uitjes): serve the app shell and let the
+  // client route, so deep links work without the 404 round-trip and offline.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => (res.ok ? res : caches.match('./index.html', { ignoreSearch: true })))
+        .catch(() => caches.match('./index.html', { ignoreSearch: true }))
+    );
+    return;
+  }
 
   // App shell: network first so updates land, cache fallback for offline.
   e.respondWith(

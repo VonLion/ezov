@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>BCP Travel</title>
+  <!-- GitHub Pages has no server-side routing, so a direct hit on /lucht etc.
+       lands here. Redirect to the app root with the path encoded in the query;
+       index.html restores the clean URL and the app routes to the right tab.
+       (Single-page-apps-for-GitHub-Pages trick, served from the domain root.) -->
+  <script>
+    var l = window.location;
+    l.replace(
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '')
+      + '/?/' + l.pathname.slice(1).replace(/&/g, '~and~')
+      + (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '')
+      + l.hash
+    );
+  </script>
+</head>
+<body></body>
+</html>
