@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'bcp-v36';
+const CACHE = 'bcp-v37';
 const SHELL = [
   './',
   './index.html',
@@ -10,8 +10,12 @@ const SHELL = [
   './manifest.webmanifest',
   './logo.svg',
   './icon.svg',
+  './favicon.svg',
+  './favicon-16.png',
+  './favicon-32.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
 ];
 

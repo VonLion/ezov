@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="BCP Travel">
+  <defs>
+    <style>.flap{font-family:'SF Mono',Menlo,'DejaVu Sans Mono',ui-monospace,monospace;font-weight:700;text-anchor:middle;dominant-baseline:central;fill:#ffc24a}</style>
+  </defs>
+  <g transform="scale(5.12)">
+    <rect width="100" height="100" rx="22" fill="#100f22"/>
+    <rect x="8" y="8" width="84" height="84" rx="15" fill="#1c1b33" stroke="#4f4636" stroke-width="2.6"/>
+    <rect x="17" y="30" width="18" height="40" rx="4" fill="#0f0e1f"/>
+    <rect x="41" y="30" width="18" height="40" rx="4" fill="#0f0e1f"/>
+    <rect x="65" y="30" width="18" height="40" rx="4" fill="#0f0e1f"/>
+    <text class="flap" x="26" y="50" font-size="22">B</text>
+    <text class="flap" x="50" y="50" font-size="22">C</text>
+    <text class="flap" x="74" y="50" font-size="22">P</text>
+  </g>
+</svg>
